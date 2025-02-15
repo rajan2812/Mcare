@@ -1,8 +1,13 @@
 "use client"
 
-import { PatientDashboardpage } from "@/components/PatientDashboard/Home/Home"
+import { HomePage } from "../dashboard-components/Home"
+import ProtectedRoute from "@/components/protected-route"
 
 export default function DashboardPage() {
-  return <PatientDashboardpage/>
+  return (
+    <ProtectedRoute>
+      <HomePage />
+    </ProtectedRoute>
+  )
 }
 

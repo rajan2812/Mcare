@@ -1,4 +1,4 @@
-import { Sidebar, Header } from "@/components/PatientDashboard/Layout/LayoutComponents"
+import { Sidebar, Header } from "../dashboard-components/layout-components"
 
 export default function SettingsLayout({ children }) {
   return (

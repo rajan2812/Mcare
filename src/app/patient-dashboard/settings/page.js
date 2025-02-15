@@ -25,8 +25,8 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
-import { toast } from "@/components/ui/use-toast"
 import { Toaster } from "@/components/ui/toaster"
+import { useToast } from "@/components/ui/use-toast"
 import {
   Camera,
   Trash2,
@@ -45,14 +45,16 @@ import {
   FileText,
   RefreshCw,
 } from "lucide-react"
-import { ViewRecords } from "@/components/PatientDashboard/Settings/ViewRecords"
+import { ViewRecords } from "../dashboard-components/ViewRecords"
+
+const API_URL = "http://localhost:4000/api/user"
 
 // Profile Settings Component
 function ProfileSettings() {
-
   const [profile, setProfile] = useState({
     patientId: "",
-    name: "",
+    firstName: "",
+    lastName: "",
     dateOfBirth: "",
     gender: "",
     email: "",
@@ -70,81 +72,230 @@ function ProfileSettings() {
 
   const [avatarUrl, setAvatarUrl] = useState("/placeholder.svg")
   const [isEditing, setIsEditing] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
+  const { toast } = useToast()
+
+  console.log("API_URL:", API_URL)
 
   useEffect(() => {
-    const userData = JSON.parse(localStorage.getItem("user"))
-    if (userData) {
-      setProfile((prevProfile) => ({
-        ...prevProfile,
-        ...userData,
-        patientId: userData.patientId || `PT${Math.floor(1000 + Math.random() * 9000)}`,
-      }))
-      setAvatarUrl(userData.avatarUrl || "/placeholder.svg")
+    const fetchUserData = async () => {
+      setIsLoading(true)
+      try {
+        const token = localStorage.getItem("token")
+        if (!token) {
+          throw new Error("No authentication token found")
+        }
+
+        const response = await fetch(`${API_URL}/patient-dashboard-data`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        })
+
+        if (!response.ok) {
+          throw new Error("Failed to fetch user data")
+        }
+
+        const data = await response.json()
+        if (data.success && data.data) {
+          setProfile((prevProfile) => ({
+            ...prevProfile,
+            ...data.data,
+            patientId: data.data.patientId, // Ensure patientId is set
+            dateOfBirth: data.data.dateOfBirth ? new Date(data.data.dateOfBirth).toISOString().split("T")[0] : "", // Format date for input
+            emergencyContact: {
+              ...prevProfile.emergencyContact,
+              ...(data.data.emergencyContact || {}),
+            },
+          }))
+          setAvatarUrl(data.data.avatarUrl || "/placeholder.svg")
+        } else {
+          throw new Error("User data not found in the response")
+        }
+      } catch (error) {
+        console.error("Error fetching user data:", error)
+        toast({
+          title: "Error",
+          description: "Failed to load user data. Please try again.",
+          variant: "destructive",
+        })
+      } finally {
+        setIsLoading(false)
+      }
     }
+
+    fetchUserData()
   }, [])
 
   const handleInputChange = (e) => {
     const { name, value } = e.target
-    if (name.includes(".")) {
-      const [parent, child] = name.split(".")
-      setProfile((prev) => ({
-        ...prev,
-        [parent]: {
-          ...prev[parent],
-          [child]: value,
-        },
-      }))
-    } else {
-      setProfile((prev) => ({ ...prev, [name]: value }))
-    }
+    setProfile((prevProfile) => {
+      if (name.includes(".")) {
+        const [parent, child] = name.split(".")
+        return {
+          ...prevProfile,
+          [parent]: {
+            ...prevProfile[parent],
+            [child]: value,
+          },
+        }
+      } else {
+        return { ...prevProfile, [name]: value }
+      }
+    })
   }
 
   const handleSelectChange = (name, value) => {
-    if (name.includes(".")) {
-      const [parent, child] = name.split(".")
-      setProfile((prev) => ({
-        ...prev,
-        [parent]: {
-          ...prev[parent],
-          [child]: value,
-        },
-      }))
-    } else {
-      setProfile((prev) => ({ ...prev, [name]: value }))
-    }
-  }
-
-  const handleSubmit = (e) => {
-    e.preventDefault()
-    localStorage.setItem("user", JSON.stringify({ ...profile, avatarUrl }))
-    toast({
-      title: "Success",
-      description: "Profile updated successfully",
+    setProfile((prevProfile) => {
+      if (name.includes(".")) {
+        const [parent, child] = name.split(".")
+        return {
+          ...prevProfile,
+          [parent]: {
+            ...prevProfile[parent],
+            [child]: value,
+          },
+        }
+      } else {
+        return { ...prevProfile, [name]: value }
+      }
     })
-    setIsEditing(false)
   }
 
-  const handleImageUpload = (e) => {
-    const file = e.target.files[0]
-    if (file) {
-      const imageUrl = URL.createObjectURL(file)
-      setAvatarUrl(imageUrl)
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    try {
+      const token = localStorage.getItem("token")
+      const user = JSON.parse(localStorage.getItem("user") || "{}")
+
+      const response = await fetch(`${API_URL}/update-profile`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          ...profile,
+          avatarUrl,
+          userType: user.userType || "patient",
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.message || "Failed to update profile")
+      }
+
+      const updatedUser = await response.json()
+      localStorage.setItem("user", JSON.stringify(updatedUser.user))
+
       toast({
-        title: "Profile picture updated",
-        description: "Your new profile picture has been set successfully.",
+        title: "Success",
+        description: "Profile updated successfully",
+      })
+      setIsEditing(false)
+    } catch (error) {
+      console.error("Error updating profile:", error)
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update profile. Please try again.",
+        variant: "destructive",
       })
     }
   }
 
-  const handleRemoveImage = () => {
-    setAvatarUrl("/placeholder.svg")
-    toast({
-      title: "Profile picture removed",
-      description: "Your profile picture has been removed.",
-    })
+  const handleImageUpload = async (e) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      try {
+        const formData = new FormData()
+        formData.append("profilePicture", file)
+
+        const token = localStorage.getItem("token")
+        const user = JSON.parse(localStorage.getItem("user") || "{}")
+
+        console.log("Token:", token)
+        console.log("User:", user)
+
+        const response = await fetch(`${API_URL}/upload-profile-picture`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          body: formData,
+        })
+
+        if (!response.ok) {
+          const errorData = await response.json()
+          console.error("Server response:", errorData)
+          throw new Error(errorData.message || "Failed to upload profile picture")
+        }
+
+        const data = await response.json()
+        setAvatarUrl(data.avatarUrl)
+        toast({
+          title: "Success",
+          description: "Profile picture updated successfully",
+        })
+      } catch (error) {
+        console.error("Error uploading profile picture:", error)
+        toast({
+          title: "Error",
+          description: error.message || "Failed to upload profile picture. Please try again.",
+          variant: "destructive",
+        })
+      }
+    }
   }
 
-  const genderOptions = ["Male", "Female", "Other", "Prefer not to say"]
+  const handleRemoveImage = async () => {
+    try {
+      const token = localStorage.getItem("token")
+      const response = await fetch(`${API_URL}/remove-profile-picture`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to remove profile picture")
+      }
+
+      setAvatarUrl("/placeholder.svg")
+      toast({
+        title: "Success",
+        description: "Profile picture removed successfully",
+      })
+    } catch (error) {
+      console.error("Error removing profile picture:", error)
+      toast({
+        title: "Error",
+        description: "Failed to remove profile picture. Please try again.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+      </div>
+    )
+  }
+
+  const getInitials = () => {
+    if (!profile.firstName && !profile.lastName) return ""
+    return `${profile.firstName?.[0] || ""}${profile.lastName?.[0] || ""}`
+  }
+
+  const genderOptions = [
+    { label: "Male", value: "male" },
+    { label: "Female", value: "female" },
+    { label: "Other", value: "other" },
+    { label: "Prefer not to say", value: "prefer_not_to_say" },
+  ]
   const bloodTypeOptions = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"]
   const relationshipOptions = ["Spouse", "Parent", "Child", "Sibling", "Friend", "Other"]
 
@@ -178,13 +329,8 @@ function ProfileSettings() {
                   <DropdownMenuTrigger asChild>
                     <div className="relative cursor-pointer group">
                       <Avatar className="w-24 h-24 transition-opacity group-hover:opacity-90">
-                        <AvatarImage src={avatarUrl} alt={profile.name} />
-                        <AvatarFallback>
-                          {profile.name
-                            .split(" ")
-                            .map((n) => n[0])
-                            .join("")}
-                        </AvatarFallback>
+                        <AvatarImage src={avatarUrl} alt={`${profile.firstName} ${profile.lastName}`} />
+                        <AvatarFallback>{getInitials()}</AvatarFallback>
                       </Avatar>
                       <div className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
                         <Camera className="w-6 h-6 text-white" />
@@ -216,7 +362,10 @@ function ProfileSettings() {
               <div className="flex-1">
                 <div className="bg-gray-50 p-4 rounded-lg">
                   <Label className="text-sm text-gray-500">Patient ID</Label>
-                  <p className="text-lg font-semibold">{profile.patientId}</p>
+                  <p className="text-lg font-semibold text-primary">{profile.patientId || "Loading..."}</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    This is your unique patient identification number
+                  </p>
                 </div>
               </div>
             </div>
@@ -230,8 +379,24 @@ function ProfileSettings() {
           </CardHeader>
           <CardContent className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="name">Full Name</Label>
-              <Input id="name" name="name" value={profile.name} onChange={handleInputChange} disabled={!isEditing} />
+              <Label htmlFor="firstName">First Name</Label>
+              <Input
+                id="firstName"
+                name="firstName"
+                value={profile.firstName}
+                onChange={handleInputChange}
+                disabled={!isEditing}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="lastName">Last Name</Label>
+              <Input
+                id="lastName"
+                name="lastName"
+                value={profile.lastName}
+                onChange={handleInputChange}
+                disabled={!isEditing}
+              />
             </div>
             <div className="space-y-2">
               <Label htmlFor="dateOfBirth">Date of Birth</Label>
@@ -257,8 +422,8 @@ function ProfileSettings() {
                 </SelectTrigger>
                 <SelectContent>
                   {genderOptions.map((option) => (
-                    <SelectItem key={option} value={option}>
-                      {option}
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -451,6 +616,7 @@ function AccountSettings() {
     type: null,
     currentValue: "",
   })
+  const { toast } = useToast()
 
   const handlePasswordChange = (e) => {
     const { name, value } = e.target
@@ -702,19 +868,31 @@ function NotificationSettings() {
     systemUpdates: false,
     preferredMethod: "app",
   })
+  const { toast } = useToast()
 
-  const handleToggle = React.useCallback((key) => {
-    setPreferences((prev) => ({
-      ...prev,
-      [key]: !prev[key],
-    }))
-  }, [])
+  const handleToggle = React.useCallback(
+    (key) => {
+      setPreferences((prev) => ({
+        ...prev,
+        [key]: !prev[key],
+      }))
+      toast({
+        title: "Settings Updated",
+        description: `${key} has been ${!preferences[key] ? "enabled" : "disabled"}`,
+      })
+    },
+    [preferences],
+  )
 
   const handleMethodChange = React.useCallback((value) => {
     setPreferences((prev) => ({
       ...prev,
       preferredMethod: value,
     }))
+    toast({
+      title: "Settings Updated",
+      description: `Preferred notification method changed to ${value}`,
+    })
   }, [])
 
   const notificationTypes = [
@@ -732,7 +910,7 @@ function NotificationSettings() {
             <Bell className="w-5 h-5 text-blue-500" />
             Notification Types
           </CardTitle>
-          <CardDescription>Choose which notifications You would like to receive</CardDescription>
+          <CardDescription>Choose which notifications you had like to receive</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-4">
@@ -755,7 +933,7 @@ function NotificationSettings() {
             <MessageSquare className="w-5 h-5 text-blue-500" />
             Notification Method
           </CardTitle>
-          <CardDescription>Choose how you would like to receive notifications</CardDescription>
+          <CardDescription>Choose how you had like to receive notifications</CardDescription>
         </CardHeader>
         <CardContent>
           <Select value={preferences.preferredMethod} onValueChange={handleMethodChange}>
@@ -777,9 +955,10 @@ function NotificationSettings() {
 
 // Verification Dialog Component
 function VerificationDialog({ isOpen, onClose, type, currentValue }) {
-  const [step, setStep] = React.useState("input") // 'input' or 'otp'
+  const [step, setStep] = React.useState("input")
   const [value, setValue] = React.useState(currentValue)
   const [otp, setOtp] = React.useState("")
+  const { toast } = useToast()
 
   const handleSubmit = (e) => {
     e.preventDefault()
@@ -924,7 +1103,7 @@ export default function SettingsPage() {
     <div className="flex flex-col gap-8">
       <div className="flex gap-8">
         {/* Settings Navigation */}
-        <div className="w-64 flex-shrink-0">
+        <div className="w-64">
           <nav className="space-y-1">
             {menuItems.map((item) => (
               <button
@@ -940,7 +1119,6 @@ export default function SettingsPage() {
             ))}
           </nav>
         </div>
-
         {/* Settings Content Area */}
         <div className="flex-1 min-h-[calc(100vh-12rem)] bg-white border border-gray-200 rounded-lg p-6">
           {React.createElement(menuItems.find((item) => item.id === activeTab)?.component || (() => null))}

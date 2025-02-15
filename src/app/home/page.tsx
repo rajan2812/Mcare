@@ -26,11 +26,106 @@ import {
   Shield,
 } from "lucide-react"
 
+interface ModalProps {
+  isOpen: boolean
+  onClose: () => void
+}
+
+function PrivacyPolicyModal({ isOpen, onClose }: ModalProps) {
+  return (
+    <Modal isOpen={isOpen} onClose={onClose}>
+      <h2 className="text-2xl font-bold mb-4">Privacy Policy</h2>
+      <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-4">
+        <p>
+          At Mcare, we are committed to protecting your privacy and ensuring the security of your personal information.
+          This Privacy Policy outlines how we collect, use, disclose, and safeguard your data when you use our services.
+        </p>
+        <h3 className="text-xl font-semibold">Information We Collect</h3>
+        <p>
+          We collect personal information that you provide directly to us, such as your name, email address, and health
+          information when you register for an account or use our services.
+        </p>
+        <h3 className="text-xl font-semibold">How We Use Your Information</h3>
+        <p>
+          We use your information to provide and improve our services, communicate with you, and comply with legal
+          obligations. We do not sell your personal information to third parties.
+        </p>
+        <h3 className="text-xl font-semibold">Data Security</h3>
+        <p>
+          We implement appropriate technical and organizational measures to protect your personal information against
+          unauthorized or unlawful processing, accidental loss, destruction, or damage.
+        </p>
+        <h3 className="text-xl font-semibold">Your Rights</h3>
+        <p>
+          You have the right to access, correct, or delete your personal information. You may also have the right to
+          restrict or object to certain processing of your data.
+        </p>
+        <h3 className="text-xl font-semibold">Changes to This Policy</h3>
+        <p>
+          We may update this Privacy Policy from time to time. We will notify you of any changes by posting the new
+          Privacy Policy on this page.
+        </p>
+        <h3 className="text-xl font-semibold">Contact Us</h3>
+        <p>If you have any questions about this Privacy Policy, please contact us at privacy@mcare.com.</p>
+      </div>
+    </Modal>
+  )
+}
+
+function TermsAndConditionsModal({ isOpen, onClose }: ModalProps) {
+  return (
+    <Modal isOpen={isOpen} onClose={onClose}>
+      <h2 className="text-2xl font-bold mb-4">Terms and Conditions</h2>
+      <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-4">
+        <p>
+          Welcome to Mcare. By using our services, you agree to comply with and be bound by the following terms and
+          conditions.
+        </p>
+        <h3 className="text-xl font-semibold">Acceptance of Terms</h3>
+        <p>
+          By accessing or using Mcare is services, you agree to be bound by these Terms and Conditions and all applicable
+          laws and regulations.
+        </p>
+        <h3 className="text-xl font-semibold">Use of Services</h3>
+        <p>
+          You agree to use Mcare is services only for lawful purposes and in accordance with these Terms and Conditions.
+          You are prohibited from violating or attempting to violate the security of the Mcare platform.
+        </p>
+        <h3 className="text-xl font-semibold">User Accounts</h3>
+        <p>
+          You are responsible for maintaining the confidentiality of your account and password. You agree to accept
+          responsibility for all activities that occur under your account.
+        </p>
+        <h3 className="text-xl font-semibold">Medical Disclaimer</h3>
+        <p>
+          The information provided by Mcare is not intended to replace professional medical advice, diagnosis, or
+          treatment. Always seek the advice of your physician or other qualified health provider with any questions you
+          may have regarding a medical condition.
+        </p>
+        <h3 className="text-xl font-semibold">Limitation of Liability</h3>
+        <p>
+          Mcare shall not be liable for any indirect, incidental, special, consequential or punitive damages, or any
+          loss of profits or revenues, whether incurred directly or indirectly, or any loss of data, use, goodwill, or
+          other intangible losses.
+        </p>
+        <h3 className="text-xl font-semibold">Changes to Terms</h3>
+        <p>
+          Mcare reserves the right to modify or replace these Terms and Conditions at any time. It is your
+          responsibility to check these Terms periodically for changes.
+        </p>
+        <h3 className="text-xl font-semibold">Contact Information</h3>
+        <p>If you have any questions about these Terms and Conditions, please contact us at legal@mcare.com.</p>
+      </div>
+    </Modal>
+  )
+}
 
 export default function Home() {
   const [isScrolled, setIsScrolled] = useState(false)
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [isAboutModalOpen, setIsAboutModalOpen] = useState(false)
+  const [isPrivacyPolicyOpen, setIsPrivacyPolicyOpen] = useState(false)
+  const [isTermsAndConditionsOpen, setIsTermsAndConditionsOpen] = useState(false)
   const controls = useAnimation()
   const { scrollYProgress } = useScroll()
   const [ref, inView] = useInView({
@@ -695,14 +790,20 @@ export default function Home() {
               <h3 className="text-xl font-semibold mb-4">Legal</h3>
               <ul className="space-y-2">
                 <li>
-                  <a href="#" className="text-gray-400 hover:text-white transition-colors duration-300">
-                    Privacy Policy{" "}
-                  </a>
-                </li>{" "}
+                  <button
+                    onClick={() => setIsPrivacyPolicyOpen(true)}
+                    className="text-gray-400 hover:text-white transition-colors duration-300"
+                  >
+                    Privacy Policy
+                  </button>
+                </li>
                 <li>
-                  <a href="#" className="textgray-400 hover:text-white transition-colors duration-300">
+                  <button
+                    onClick={() => setIsTermsAndConditionsOpen(true)}
+                    className="text-gray-400 hover:text-white transition-colors duration-300"
+                  >
                     Terms of Service
-                  </a>
+                  </button>
                 </li>
               </ul>
             </div>
@@ -748,6 +849,9 @@ export default function Home() {
         </p>
         <p>Join us in revolutionizing healthcare delivery and experience the future of medicine today with Mcare.</p>
       </Modal>
+
+      <PrivacyPolicyModal isOpen={isPrivacyPolicyOpen} onClose={() => setIsPrivacyPolicyOpen(false)} />
+      <TermsAndConditionsModal isOpen={isTermsAndConditionsOpen} onClose={() => setIsTermsAndConditionsOpen(false)} />
 
       <style jsx global>{`
         @import 'tailwindcss/base';

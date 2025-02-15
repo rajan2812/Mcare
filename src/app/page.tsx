@@ -1,19 +1,22 @@
-// pages/index.tsx
-import React from 'react';
-import Home from '@/app/home/page'
-//import { PatientDashboardpage } from "@/components/PatientDashboard/Home/page"
+"use client"
 
+import { useEffect } from "react"
+import { useRouter } from "next/navigation"
+import Home from "./home/page"
 
-const HomePage = () => {
-  return (
-    <div>
-    <Home/>
+export default function Page() {
+  const router = useRouter()
 
+  useEffect(() => {
+    // Check if user is logged in
+    const isLoggedIn = localStorage.getItem("isLoggedIn")
 
-    </div>
-    
-  );
-};
+    if (isLoggedIn === "true") {
+      router.push("/patient-dashboard")
+    }
+  }, [router])
 
+  // If not logged in, show the home page
+  return <Home />
+}
 
-export default HomePage;
