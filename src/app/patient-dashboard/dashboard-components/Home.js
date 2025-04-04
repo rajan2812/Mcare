@@ -13,16 +13,18 @@ import {
   Calendar,
   CreditCard,
   Settings,
-  Video,
-  MessageSquare,
   PillIcon as PrescriptionIcon,
+  AlertCircle,
+  Video,
 } from "lucide-react"
 import { Sidebar, Header } from "./layout-components"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { ChatSection } from "../components/ChatSection"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+// Remove or comment out:
+// import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { useToast } from "@/components/ui/use-toast"
 import { Prescription } from "./Prescription"
 
 const ScrollLink = ({ children, targetId }) => {
@@ -40,52 +42,69 @@ const ScrollLink = ({ children, targetId }) => {
   )
 }
 
-const mockAppointments = [
-  {
-    id: "1",
-    doctorName: "Dr. Sarah Smith",
-    date: "2024-01-20",
-    time: "10:00 AM",
-    status: "upcoming",
-    type: "in-person",
-  },
-  {
-    id: "2",
-    doctorName: "Dr. John Doe",
-    date: "2024-01-22",
-    time: "2:30 PM",
-    status: "upcoming",
-    type: "online",
-  },
-  {
-    id: "3",
-    doctorName: "Dr. Emily Brown",
-    date: "2024-01-15",
-    time: "11:00 AM",
-    status: "completed",
-    type: "in-person",
-  },
-]
+// Add this utility function at the top of the file
+const formatDisplayDate = (dateString) => {
+  // Ensure we're parsing the date correctly regardless of timezone
+  const [year, month, day] = dateString.split("-").map(Number)
 
-const HealthRecordCard = ({ record }) => (
-  <div className="p-4 border rounded-md">
-    <h3 className="font-semibold">{record.title}</h3>
-    <p>Date: {record.date}</p>
-    <p>Type: {record.type}</p>
-  </div>
-)
+  // Create a date object with the exact day specified (using UTC to avoid local timezone shifts)
+  const date = new Date(Date.UTC(year, month - 1, day))
+
+  // Format the date for display using toLocaleDateString
+  return date.toLocaleDateString()
+}
+
+const menuItems = [
+  {
+    label: "Home",
+    href: "/patient-dashboard",
+    icon: Home,
+  },
+  {
+    label: "Appointments",
+    href: "/patient-dashboard/appointments",
+    icon: Calendar,
+  },
+  {
+    label: "Billing",
+    href: "/patient-dashboard/billing",
+    icon: CreditCard,
+  },
+  {
+    label: "Settings",
+    href: "/patient-dashboard/settings",
+    icon: Settings,
+  },
+  // Chat feature removed
+  // {
+  //   label: "Chat",
+  //   href: "#",
+  //   icon: MessageSquare,
+  // },
+]
 
 const MotionCard = motion(Card)
 
-const menuItems = [
-  { icon: Home, label: "Home", href: "/patient-dashboard/dashboard" },
-  { icon: Calendar, label: "Book Appointment", href: "/patient-dashboard/appointments" },
-  { icon: MessageSquare, label: "Chat", href: "#chat-section" },
-  { icon: FileText, label: "Medical Records", href: "/patient-dashboard/records" },
-  { icon: Video, label: "Telemedicine", href: "/patient-dashboard/telemedicine" },
-  { icon: CreditCard, label: "Payment History", href: "/patient-dashboard/payment-history" },
-  { icon: Settings, label: "Settings", href: "/patient-dashboard/settings" },
-]
+const HealthRecordCard = ({ record }) => {
+  return (
+    <Card className="bg-white shadow-sm">
+      <CardContent className="p-3">
+        <h3 className="font-semibold">{record.title}</h3>
+        <p className="text-sm text-gray-500">
+          {record.type} - {formatDisplayDate(record.date)}
+        </p>
+        <a
+          href={record.fileUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-block mt-2 text-blue-500 hover:underline"
+        >
+          View Document
+        </a>
+      </CardContent>
+    </Card>
+  )
+}
 
 export function HomePage() {
   const [user, setUser] = useState(null)
@@ -94,7 +113,10 @@ export function HomePage() {
   const [notifications, setNotifications] = useState([])
   const [appointments, setAppointments] = useState([])
   const [upcomingAppointments, setUpcomingAppointments] = useState([])
-  const [isChatOpen, setIsChatOpen] = useState(false)
+  const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false)
+  const [selectedAppointment, setSelectedAppointment] = useState(null)
+  const [confirmingAppointmentId, setConfirmingAppointmentId] = useState(null)
+  const { toast } = useToast()
 
   useEffect(() => {
     const fetchData = async () => {
@@ -133,10 +155,22 @@ export function HomePage() {
 
         setUser(result.data)
 
-        // Fetch other dashboard data
-        // For now using mock data, but you would fetch this from your API
-        setAppointments(mockAppointments)
-        setUpcomingAppointments(mockUpcomingAppointments)
+        // Fetch upcoming appointments including those needing confirmation
+        const appointmentsResponse = await fetch(
+          `http://localhost:4000/api/appointments?userId=${result.data.id}&userType=patient&filter=upcoming&includeConfirmationPending=true`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          },
+        )
+
+        if (appointmentsResponse.ok) {
+          const appointmentsData = await appointmentsResponse.json()
+          if (appointmentsData.success) {
+            setUpcomingAppointments(appointmentsData.appointments)
+          }
+        }
       } catch (err) {
         console.error("Error fetching dashboard data:", err)
         setError(err.message)
@@ -147,6 +181,67 @@ export function HomePage() {
 
     fetchData()
   }, []) // Empty dependency array since we only want to fetch once on mount
+
+  const handleConfirmReschedule = async (appointmentId, action) => {
+    try {
+      setConfirmingAppointmentId(appointmentId)
+      const token = localStorage.getItem("token")
+      const user = JSON.parse(localStorage.getItem("user") || "{}")
+
+      console.log("Sending confirmation request with user:", user)
+
+      const response = await fetch(`http://localhost:4000/api/appointments/${appointmentId}/confirm-reschedule`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+          user: JSON.stringify(user),
+          "user-role": "patient",
+        },
+        body: JSON.stringify({
+          action,
+          userId: user.id,
+          userType: "patient",
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        console.error("Error response:", errorData)
+        throw new Error(errorData.message || "Failed to confirm appointment")
+      }
+
+      const data = await response.json()
+
+      // Update the local state to reflect the change
+      setUpcomingAppointments((prev) =>
+        prev.map((apt) =>
+          apt.id === appointmentId ? { ...apt, status: action === "confirm" ? "confirmed" : "cancelled" } : apt,
+        ),
+      )
+
+      toast({
+        title: action === "confirm" ? "Appointment Confirmed" : "Appointment Rejected",
+        description: data.message,
+      })
+
+      setIsConfirmDialogOpen(false)
+    } catch (error) {
+      console.error("Error confirming rescheduled appointment:", error)
+      toast({
+        title: "Error",
+        description: error.message || "Failed to process your request",
+        variant: "destructive",
+      })
+    } finally {
+      setConfirmingAppointmentId(null)
+    }
+  }
+
+  const openConfirmDialog = (appointment) => {
+    setSelectedAppointment(appointment)
+    setIsConfirmDialogOpen(true)
+  }
 
   const currentDate = new Date().toLocaleDateString("en-US", {
     year: "numeric",
@@ -205,7 +300,7 @@ export function HomePage() {
     () => [
       {
         title: "Upcoming Appointments",
-        value: "2",
+        value: upcomingAppointments?.length.toString() || "0",
         icon: CalendarDays,
         color: "bg-blue-500",
         targetId: null,
@@ -232,7 +327,7 @@ export function HomePage() {
         targetId: null,
       },
     ],
-    [],
+    [upcomingAppointments],
   )
 
   const generateAppointmentNotifications = useCallback(() => {
@@ -289,25 +384,6 @@ export function HomePage() {
     return () => clearInterval(intervalId)
   }, [generateAppointmentNotifications, generateMedicineReminders])
 
-  const mockUpcomingAppointments = [
-    {
-      id: "1",
-      doctorName: "Dr. Sarah Smith",
-      date: "2024-01-20",
-      time: "10:00 AM",
-      type: "video",
-      isPaid: false,
-    },
-    {
-      id: "2",
-      doctorName: "Dr. John Doe",
-      date: "2024-01-22",
-      time: "2:30 PM",
-      type: "in-person",
-      isPaid: true,
-    },
-  ]
-
   if (loading) {
     return (
       <div className="flex h-screen bg-gray-50">
@@ -355,12 +431,16 @@ export function HomePage() {
   }
 
   const itemVariants = {
-    hidden: { y: 20, opacity: 0 },
-    visible: {
-      y: 0,
-      opacity: 1,
+      hidden: { y: 20, opacity: 0 },
+      visible: {
+        y: 0,
+        opacity: 1,
+      },
     },
-  }
+    // Filter appointments that need confirmation
+    appointmentsNeedingConfirmation = upcomingAppointments.filter(
+      (appointment) => appointment.status === "pending_patient_confirmation",
+    )
 
   return (
     <div className="flex h-screen bg-gray-50">
@@ -393,32 +473,13 @@ export function HomePage() {
           <ul className="space-y-2">
             {menuItems.map((item) => (
               <li key={item.label}>
-                {item.label === "Chat" ? (
-                  <Dialog open={isChatOpen} onOpenChange={setIsChatOpen}>
-                    <DialogTrigger asChild>
-                      <Button variant="ghost" className="w-full justify-start">
-                        <item.icon className="w-5 h-5 mr-2" />
-                        <span>{item.label}</span>
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent className="sm:max-w-[900px] sm:h-[80vh]">
-                      <DialogHeader>
-                        <DialogTitle>Chat with Your Doctors</DialogTitle>
-                      </DialogHeader>
-                      <div className="h-full overflow-hidden">
-                        <ChatSection patientId={user?.id} />
-                      </div>
-                    </DialogContent>
-                  </Dialog>
-                ) : (
-                  <Link
-                    href={item.href}
-                    className="flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-gray-700 hover:bg-blue-50 hover:text-blue-600"
-                  >
-                    <item.icon className="w-5 h-5" />
-                    <span>{item.label}</span>
-                  </Link>
-                )}
+                <Link
+                  href={item.href}
+                  className="flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-gray-700 hover:bg-blue-50 hover:text-blue-600"
+                >
+                  <item.icon className="w-5 h-5" />
+                  <span>{item.label}</span>
+                </Link>
               </li>
             ))}
           </ul>
@@ -442,6 +503,45 @@ export function HomePage() {
                 </CardContent>
               </Card>
             </motion.div>
+
+            {/* Appointments Needing Confirmation */}
+            {appointmentsNeedingConfirmation.length > 0 && (
+              <motion.div variants={itemVariants}>
+                <Card className="border-amber-500 border-2">
+                  <CardHeader>
+                    <CardTitle className="flex items-center text-amber-600">
+                      <AlertCircle className="mr-2 h-5 w-5" />
+                      Appointments Requiring Confirmation
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      {appointmentsNeedingConfirmation.map((appointment) => (
+                        <div key={appointment.id} className="bg-amber-50 p-4 rounded-lg border border-amber-200">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <h3 className="font-semibold">{appointment.patientName}</h3>
+                              <p className="text-sm text-gray-600">
+                                Rescheduled to: {formatDisplayDate(appointment.date)} at{" "}
+                                {appointment.timeSlot.startTime}
+                              </p>
+                              <p className="text-sm text-amber-600 font-medium mt-1">
+                                This appointment has been rescheduled by your doctor and requires your confirmation.
+                              </p>
+                            </div>
+                            <div className="flex gap-2">
+                              <Button size="sm" onClick={() => openConfirmDialog(appointment)}>
+                                Confirm or Reject
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            )}
 
             {/* Quick Stats */}
             <motion.div variants={itemVariants} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -474,15 +574,56 @@ export function HomePage() {
                     upcomingAppointments.map((appointment) => (
                       <motion.div
                         key={appointment.id}
-                        className="mb-4 p-3 bg-gray-50 rounded-lg"
+                        className={`mb-4 p-3 rounded-lg ${
+                          appointment.status === "pending_patient_confirmation"
+                            ? "bg-amber-50 border border-amber-200"
+                            : "bg-gray-50"
+                        }`}
                         variants={itemVariants}
                       >
-                        <h3 className="font-semibold">{appointment.doctorName}</h3>
+                        <h3 className="font-semibold">{appointment.patientName}</h3>
                         <p className="text-sm text-gray-600">
-                          {appointment.date} at {appointment.time}
+                          {formatDisplayDate(appointment.date)} at {appointment.timeSlot.startTime}
                         </p>
-                        <p className="text-sm text-gray-600">Type: {appointment.type}</p>
-                        {appointment.type === "video" && !appointment.isPaid && (
+                        <div className="flex items-center mt-1">
+                          <p className="text-sm text-gray-600 mr-2">Type: {appointment.consultationType}</p>
+                          <p
+                            className={`text-sm font-medium ${
+                              appointment.status === "pending_patient_confirmation"
+                                ? "text-amber-600"
+                                : appointment.status === "confirmed"
+                                  ? "text-green-600"
+                                  : "text-blue-600"
+                            }`}
+                          >
+                            Status:{" "}
+                            {appointment.status === "pending_patient_confirmation"
+                              ? "Needs Confirmation"
+                              : appointment.status.charAt(0).toUpperCase() + appointment.status.slice(1)}
+                          </p>
+                        </div>
+
+                        {appointment.status === "pending_patient_confirmation" && (
+                          <div className="mt-2 flex gap-2">
+                            <Button
+                              size="sm"
+                              onClick={() => handleConfirmReschedule(appointment.id, "confirm")}
+                              disabled={confirmingAppointmentId === appointment.id}
+                            >
+                              {confirmingAppointmentId === appointment.id ? "Processing..." : "Confirm"}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleConfirmReschedule(appointment.id, "reject")}
+                              disabled={confirmingAppointmentId === appointment.id}
+                            >
+                              Reject
+                            </Button>
+                          </div>
+                        )}
+
+                        {appointment.consultationType === "video" && !appointment.isPaid && (
                           <Link href="/patient-dashboard/payment">
                             <Button variant="outline" size="sm" className="mt-2">
                               Pay Now
@@ -503,19 +644,19 @@ export function HomePage() {
               <MotionCard variants={itemVariants}>
                 <CardHeader>
                   <CardTitle className="flex items-center">
-                    <Video className="mr-2 h-5 w-5" />
-                    Telemedicine Consultations
+                    <CalendarDays className="mr-2 h-5 w-5" />
+                    Health Reminders
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="mb-4">Your next telemedicine consultation:</p>
+                  <p className="mb-4">Your upcoming health reminders:</p>
                   <div className="p-3 bg-gray-50 rounded-lg">
-                    <h3 className="font-semibold">Dr. Sarah Smith</h3>
-                    <p className="text-sm text-gray-600">Tomorrow at 10:00 AM</p>
-                    <p className="text-sm text-gray-600">Type: Video Call</p>
+                    <h3 className="font-semibold">Annual Check-up</h3>
+                    <p className="text-sm text-gray-600">Next month</p>
+                    <p className="text-sm text-gray-600">Type: In-person</p>
                   </div>
-                  <Link href="/patient-dashboard/telemedicine">
-                    <Button className="w-full mt-4">Manage Telemedicine</Button>
+                  <Link href="/patient-dashboard/appointments">
+                    <Button className="w-full mt-4">View All Reminders</Button>
                   </Link>
                 </CardContent>
               </MotionCard>
@@ -554,9 +695,57 @@ export function HomePage() {
                 </CardContent>
               </Card>
             </motion.div>
+            {/* Add Prescription component to the dashboard */}
+            <div className="mt-6">
+              <h2 className="text-xl font-semibold mb-4">My Prescriptions</h2>
+              <Prescription />
+            </div>
           </motion.div>
         </main>
       </div>
+
+      {/* Confirmation Dialog */}
+      <Dialog open={isConfirmDialogOpen} onOpenChange={setIsConfirmDialogOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Confirm Rescheduled Appointment</DialogTitle>
+          </DialogHeader>
+          {selectedAppointment && (
+            <div className="space-y-4">
+              <p>
+                Your doctor has rescheduled your appointment to:
+                <span className="font-semibold block mt-1">
+                  {formatDisplayDate(selectedAppointment.date)} at {selectedAppointment.timeSlot.startTime}
+                </span>
+              </p>
+
+              <Alert>
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>Please confirm or reject this new timing</AlertTitle>
+                <AlertDescription>
+                  If you reject this appointment, it will be cancelled and you'll need to book a new one.
+                </AlertDescription>
+              </Alert>
+
+              <div className="flex justify-end gap-2 pt-4">
+                <Button
+                  variant="outline"
+                  onClick={() => handleConfirmReschedule(selectedAppointment.id, "reject")}
+                  disabled={confirmingAppointmentId === selectedAppointment.id}
+                >
+                  Reject
+                </Button>
+                <Button
+                  onClick={() => handleConfirmReschedule(selectedAppointment.id, "confirm")}
+                  disabled={confirmingAppointmentId === selectedAppointment.id}
+                >
+                  {confirmingAppointmentId === selectedAppointment.id ? "Processing..." : "Confirm"}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

@@ -4,6 +4,8 @@ import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Inter } from "next/font/google"
 import type React from "react"
+// Import the AppointmentNotifications component at the top of the file
+import { AppointmentNotifications } from "./components/AppointmentNotifications"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -68,6 +70,11 @@ export default function PatientDashboardLayout({ children }: { children: React.R
     )
   }
 
-  return <div className={inter.className}>{children}</div>
+  return (
+    <div className={inter.className}>
+      <AppointmentNotifications />
+      {children}
+    </div>
+  )
 }
 

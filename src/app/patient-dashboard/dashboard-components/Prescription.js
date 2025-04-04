@@ -1,9 +1,12 @@
+"use client"
+
 import { useState, useEffect } from "react"
-import { Card } from "@/components/ui/card"
+import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { AlertCircle, Pill } from "lucide-react"
+import { AlertCircle, Pill, Printer } from "lucide-react"
 import { motion } from "framer-motion"
-import { cn } from "@/lib/utils"
+import { Badge } from "@/components/ui/badge"
+import { useToast } from "@/components/ui/use-toast"
 
 const MotionCard = motion(Card)
 
@@ -22,86 +25,221 @@ const MedicationStatusCard = ({ count }) => (
 )
 
 export function Prescription({ patientId }) {
+  const { toast } = useToast()
   const [prescriptions, setPrescriptions] = useState([])
   const [activeMedicationCount, setActiveMedicationCount] = useState(3)
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState(null)
+
+  const fetchPrescriptions = async () => {
+    setIsLoading(true)
+    setError(null)
+    try {
+      const token = localStorage.getItem("token")
+      const user = JSON.parse(localStorage.getItem("user") || "{}")
+
+      if (!token || !user.id) {
+        throw new Error("Authentication required")
+      }
+
+      console.log("Fetching prescriptions for patient ID:", user.id)
+
+      const response = await fetch(`http://localhost:4000/api/patients/${user.id}/prescriptions`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.message || "Failed to fetch prescriptions")
+      }
+
+      const data = await response.json()
+      console.log("Prescriptions data received:", data)
+
+      if (data.success && data.data && data.data.prescriptions) {
+        setPrescriptions(data.data.prescriptions)
+      } else {
+        setPrescriptions([])
+      }
+    } catch (error) {
+      console.error("Error fetching prescriptions:", error)
+      setError(error.message || "Failed to load prescriptions")
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   useEffect(() => {
-    // In a real application, you would fetch prescriptions from an API
-    // For now, we'll use mock data
-    const mockPrescriptions = [
-      {
-        id: "1",
-        doctorName: "Dr. Sarah Smith",
-        medication: "Amoxicillin",
-        dosage: "500mg",
-        frequency: "3 times a day",
-        duration: "7 days",
-        date: "2024-01-18",
-        notes: "Take with food. Complete the full course.",
-        isActive: true,
-      },
-      {
-        id: "2",
-        doctorName: "Dr. John Doe",
-        medication: "Lisinopril",
-        dosage: "10mg",
-        frequency: "Once daily",
-        duration: "30 days",
-        date: "2024-01-20",
-        notes: "Take in the morning. Monitor blood pressure regularly.",
-        isActive: true,
-      },
-      {
-        id: "3",
-        doctorName: "Dr. Emily Brown",
-        medication: "Ibuprofen",
-        dosage: "400mg",
-        frequency: "As needed",
-        duration: "5 days",
-        date: "2024-01-15",
-        notes: "Take for pain relief. Do not exceed 3 doses in 24 hours.",
-        isActive: true,
-      },
-    ]
-
-    setPrescriptions(mockPrescriptions)
-    setActiveMedicationCount(mockPrescriptions.filter((p) => p.isActive).length)
+    fetchPrescriptions()
   }, [])
+
+  const handlePrintPrescription = (prescription) => {
+    // Create a printable version of the prescription
+    const printWindow = window.open("", "_blank")
+
+    if (!printWindow) {
+      toast({
+        title: "Error",
+        description: "Please allow pop-ups to print prescriptions",
+        variant: "destructive",
+      })
+      return
+    }
+
+    const doctorName = prescription.doctorId
+      ? `${prescription.doctorId.firstName} ${prescription.doctorId.lastName}`
+      : "Your Doctor"
+
+    const specialization = prescription.doctorId?.specializations?.join(", ") || ""
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Prescription</title>
+          <style>
+            body { font-family: Arial, sans-serif; margin: 20px; }
+            .header { display: flex; justify-content: space-between; border-bottom: 1px solid #ddd; padding-bottom: 10px; }
+            .prescription-details { margin-top: 20px; }
+            .medication { margin-bottom: 15px; padding: 10px; border: 1px solid #eee; border-radius: 5px; }
+            .footer { margin-top: 30px; border-top: 1px solid #ddd; padding-top: 10px; text-align: right; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div>
+              <h1>Medical Prescription</h1>
+              <p>Date: ${new Date(prescription.createdAt).toLocaleDateString()}</p>
+            </div>
+            <div>
+              <h2>Dr. ${doctorName}</h2>
+              <p>${specialization}</p>
+            </div>
+          </div>
+          
+          <div class="prescription-details">
+            <h3>Diagnosis</h3>
+            <p>${prescription.diagnosis}</p>
+            
+            <h3>Medications</h3>
+            ${prescription.medications
+              .map(
+                (med) => `
+              <div class="medication">
+                <p><strong>${med.name}</strong> - ${med.dosage}</p>
+                <p>Frequency: ${med.frequency}</p>
+                <p>Duration: ${med.duration}</p>
+                ${med.instructions ? `<p>Instructions: ${med.instructions}</p>` : ""}
+              </div>
+            `,
+              )
+              .join("")}
+            
+            ${
+              prescription.additionalNotes
+                ? `
+              <h3>Additional Notes</h3>
+              <p>${prescription.additionalNotes}</p>
+            `
+                : ""
+            }
+          </div>
+          
+          <div class="footer">
+            <p>Doctor's Signature: ___________________</p>
+          </div>
+        </body>
+      </html>
+    `)
+
+    printWindow.document.close()
+    printWindow.focus()
+    setTimeout(() => {
+      printWindow.print()
+    }, 500)
+  }
+
+  const renderPrescriptions = () => {
+    if (prescriptions.length === 0) {
+      return (
+        <div className="text-center py-8">
+          <AlertCircle className="h-12 w-12 text-yellow-500 mx-auto mb-4" />
+          <h3 className="text-lg font-medium mb-2">No prescriptions found</h3>
+          <p className="text-gray-500">You don't have any prescriptions yet.</p>
+        </div>
+      )
+    }
+
+    return prescriptions.map((prescription) => (
+      <Card key={prescription._id} className="mb-4">
+        <CardHeader>
+          <div className="flex justify-between items-start">
+            <div>
+              <CardTitle>Prescription</CardTitle>
+              <CardDescription>{new Date(prescription.createdAt).toLocaleDateString()}</CardDescription>
+            </div>
+            <Badge variant={prescription.status === "active" ? "success" : "secondary"}>{prescription.status}</Badge>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <div>
+              <h4 className="font-medium text-sm text-gray-500">Diagnosis</h4>
+              <p>{prescription.diagnosis}</p>
+            </div>
+
+            <div>
+              <h4 className="font-medium text-sm text-gray-500 mb-2">Medications</h4>
+              <div className="space-y-3">
+                {prescription.medications.map((medication, index) => (
+                  <div key={index} className="p-3 bg-gray-50 rounded-md">
+                    <div className="flex justify-between">
+                      <div className="font-medium">{medication.name}</div>
+                      <div>{medication.dosage}</div>
+                    </div>
+                    <div className="text-sm text-gray-500 mt-1">
+                      {medication.frequency} · {medication.duration}
+                    </div>
+                    {medication.instructions && (
+                      <div className="text-sm mt-2 border-t pt-2">
+                        <span className="font-medium">Instructions: </span>
+                        {medication.instructions}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {prescription.additionalNotes && (
+              <div>
+                <h4 className="font-medium text-sm text-gray-500">Additional Notes</h4>
+                <p>{prescription.additionalNotes}</p>
+              </div>
+            )}
+          </div>
+        </CardContent>
+        <CardFooter>
+          <Button variant="outline" className="w-full" onClick={() => handlePrintPrescription(prescription)}>
+            <Printer className="w-4 h-4 mr-2" />
+            Print Prescription
+          </Button>
+        </CardFooter>
+      </Card>
+    ))
+  }
 
   return (
     <div className="space-y-4">
       <MedicationStatusCard count={activeMedicationCount} />
 
-      {prescriptions.length > 0 ? (
-        <div className="space-y-4">
-          {prescriptions.map((prescription) => (
-            <motion.div
-              key={prescription.id}
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.3 }}
-              className={cn(
-                "p-4 border rounded-md",
-                prescription.isActive ? "border-green-200 bg-green-50" : "border-gray-200",
-              )}
-            >
-              <h3 className="font-semibold">{prescription.medication}</h3>
-              <p className="text-sm text-gray-600">Prescribed by: {prescription.doctorName}</p>
-              <p className="text-sm">Dosage: {prescription.dosage}</p>
-              <p className="text-sm">Frequency: {prescription.frequency}</p>
-              <p className="text-sm">Duration: {prescription.duration}</p>
-              <p className="text-sm text-gray-500 mt-2">Prescribed on: {prescription.date}</p>
-              {prescription.notes && (
-                <div className="mt-2 p-2 bg-yellow-50 rounded-md flex items-start">
-                  <AlertCircle className="h-5 w-5 text-yellow-500 mr-2 flex-shrink-0 mt-0.5" />
-                  <p className="text-sm text-yellow-700">{prescription.notes}</p>
-                </div>
-              )}
-            </motion.div>
-          ))}
-        </div>
+      {isLoading ? (
+        <p>Loading prescriptions...</p>
+      ) : error ? (
+        <div className="text-red-500">{error}</div>
       ) : (
-        <p className="text-center text-gray-500">No recent prescriptions</p>
+        renderPrescriptions()
       )}
       <Button className="w-full mt-4">View All Prescriptions</Button>
     </div>

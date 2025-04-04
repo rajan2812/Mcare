@@ -14,15 +14,16 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Home, Calendar, Users, MessageSquare, Settings, Bell, Search, LogOut, AlertCircle } from "lucide-react"
+import { Home, Calendar, Users, Settings, Bell, Search, LogOut, AlertCircle, Clock } from "lucide-react"
 import type React from "react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { NotificationDropdown } from "./NotificationDropdown"
 
 const menuItems = [
   { icon: Home, label: "Home", href: "/doctor-dashboard" },
+  { icon: Users, label: "Queue", href: "/doctor-dashboard/queue" },
   { icon: Calendar, label: "Appointments", href: "/doctor-dashboard/appointments" },
-  { icon: Users, label: "Patients", href: "/doctor-dashboard/patients" },
-  { icon: MessageSquare, label: "Chat", href: "/doctor-dashboard/chat" },
+  { icon: Clock, label: "History", href: "/doctor-dashboard/history" },
   { icon: Settings, label: "Settings", href: "/doctor-dashboard/settings" },
 ]
 
@@ -161,6 +162,8 @@ export function DoctorDashboardLayout({ children }: DoctorDashboardLayoutProps) 
             </div>
           </div>
           <div className="flex items-center gap-4">
+            {/* Add the NotificationDropdown component here */}
+            <NotificationDropdown />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" className="relative">
@@ -185,16 +188,6 @@ export function DoctorDashboardLayout({ children }: DoctorDashboardLayoutProps) 
           </div>
         </header>
         <main className="flex-1 overflow-auto p-6">
-          {!doctorInfo.isVerified && (
-            <Alert variant="warning" className="mb-6">
-              <AlertCircle className="h-4 w-4" />
-              <AlertTitle>Profile Under Review</AlertTitle>
-              <AlertDescription>
-                Your profile is currently under review by our admin team. Some features may be limited until your
-                profile is verified. We will notify you once the review is complete.
-              </AlertDescription>
-            </Alert>
-          )}
           {children}
         </main>
       </div>

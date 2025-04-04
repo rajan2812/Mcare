@@ -4,9 +4,6 @@ node_modules/
 # Environment variables
 .env
 
-# Firebase service account
-config/firebase-serviceAccount.json
-
 # Logs
 logs
 *.log

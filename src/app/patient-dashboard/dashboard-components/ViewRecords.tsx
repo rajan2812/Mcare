@@ -3,8 +3,9 @@ import { useState, useEffect } from "react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { Download, Search } from "lucide-react"
+import { Download, Search, Upload } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { MedicalRecordsUploadPrompt } from "../components/MedicalRecordsUploadPrompt"
 
 interface Record {
   id: string
@@ -108,6 +109,10 @@ export function ViewRecords() {
           className="pl-8"
         />
       </div>
+
+      {/* Always show the upload prompt if there are confirmed appointments */}
+      <MedicalRecordsUploadPrompt variant="compact" className="mb-4" />
+
       {filteredRecords.length > 0 ? (
         <Table>
           <TableHeader>
@@ -135,7 +140,17 @@ export function ViewRecords() {
           </TableBody>
         </Table>
       ) : (
-        <div className="text-center py-4 text-gray-500">No records found</div>
+        <div className="text-center py-8 bg-gray-50 rounded-lg border border-dashed border-gray-300">
+          <div className="flex flex-col items-center justify-center">
+            <Upload className="h-12 w-12 text-gray-400 mb-2" />
+            <h3 className="text-lg font-medium text-gray-700">No files available</h3>
+            <p className="text-sm text-gray-500 mb-4">Upload your medical records for better consultation</p>
+            <Button>
+              <Upload className="w-4 h-4 mr-2" />
+              Upload Files
+            </Button>
+          </div>
+        </div>
       )}
     </div>
   )

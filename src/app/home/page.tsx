@@ -12,10 +12,6 @@ import {
   Phone,
   Mail,
   MapPin,
-  Facebook,
-  Twitter,
-  Instagram,
-  Linkedin,
   CheckCircle,
   Star,
   Users,
@@ -24,6 +20,11 @@ import {
   Calendar,
   Clock,
   Shield,
+  UserIcon as UserMd,
+  Video,
+  FileText,
+  Bell,
+  Heart,
 } from "lucide-react"
 
 interface ModalProps {
@@ -83,8 +84,8 @@ function TermsAndConditionsModal({ isOpen, onClose }: ModalProps) {
         </p>
         <h3 className="text-xl font-semibold">Acceptance of Terms</h3>
         <p>
-          By accessing or using Mcare is services, you agree to be bound by these Terms and Conditions and all applicable
-          laws and regulations.
+          By accessing or using Mcare is services, you agree to be bound by these Terms and Conditions and all
+          applicable laws and regulations.
         </p>
         <h3 className="text-xl font-semibold">Use of Services</h3>
         <p>
@@ -126,12 +127,34 @@ export default function Home() {
   const [isAboutModalOpen, setIsAboutModalOpen] = useState(false)
   const [isPrivacyPolicyOpen, setIsPrivacyPolicyOpen] = useState(false)
   const [isTermsAndConditionsOpen, setIsTermsAndConditionsOpen] = useState(false)
-  const controls = useAnimation()
   const { scrollYProgress } = useScroll()
-  const [ref, inView] = useInView({
+  const [servicesRef, servicesInView] = useInView({
     triggerOnce: true,
     threshold: 0.1,
+    rootMargin: "0px 0px -100px 0px",
   })
+
+  const [doctorsRef, doctorsInView] = useInView({
+    triggerOnce: true,
+    threshold: 0.1,
+    rootMargin: "0px 0px -100px 0px",
+  })
+
+  const [aboutRef, aboutInView] = useInView({
+    triggerOnce: true,
+    threshold: 0.1,
+    rootMargin: "0px 0px -100px 0px",
+  })
+
+  const [contactRef, contactInView] = useInView({
+    triggerOnce: true,
+    threshold: 0.1,
+    rootMargin: "0px 0px -100px 0px",
+  })
+  const servicesControls = useAnimation()
+  const doctorsControls = useAnimation()
+  const aboutControls = useAnimation()
+  const contactControls = useAnimation()
 
   // Parallax effect for hero section
   const y = useTransform(scrollYProgress, [0, 1], ["0%", "50%"])
@@ -151,10 +174,28 @@ export default function Home() {
   }, [handleScroll])
 
   useEffect(() => {
-    if (inView) {
-      controls.start("visible")
+    if (servicesInView) {
+      servicesControls.start("visible")
     }
-  }, [controls, inView])
+  }, [servicesControls, servicesInView])
+
+  useEffect(() => {
+    if (doctorsInView) {
+      doctorsControls.start("visible")
+    }
+  }, [doctorsControls, doctorsInView])
+
+  useEffect(() => {
+    if (aboutInView) {
+      aboutControls.start("visible")
+    }
+  }, [aboutControls, aboutInView])
+
+  useEffect(() => {
+    if (contactInView) {
+      contactControls.start("visible")
+    }
+  }, [contactControls, contactInView])
 
   const scrollToSection = (sectionId: string) => {
     const section = document.getElementById(sectionId)
@@ -479,9 +520,9 @@ export default function Home() {
         <section id="services" className="py-20 bg-gray-50">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <motion.div
-              ref={ref}
+              ref={servicesRef}
               initial="hidden"
-              animate={controls}
+              animate={servicesControls}
               variants={{
                 visible: { opacity: 1, y: 0 },
                 hidden: { opacity: 0, y: 50 },
@@ -492,24 +533,28 @@ export default function Home() {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
                 {[
                   {
-                    icon: "/images/doctor-icon.svg",
+                    icon: UserMd,
                     title: "Expert Doctors",
                     description: "Connect with top specialists in various fields.",
+                    color: "bg-blue-100 text-blue-600",
                   },
                   {
-                    icon: "/images/telemedicine-icon.svg",
+                    icon: Video,
                     title: "Telemedicine",
                     description: "Virtual consultations from the comfort of your home.",
+                    color: "bg-purple-100 text-purple-600",
                   },
                   {
-                    icon: "/images/prescription-icon.svg",
+                    icon: FileText,
                     title: "E-Prescriptions",
                     description: "Receive and manage your prescriptions online.",
+                    color: "bg-green-100 text-green-600",
                   },
                   {
-                    icon: "/images/reminder-icon.svg",
+                    icon: Bell,
                     title: "Health Reminders",
                     description: "Never miss a medication or appointment again.",
+                    color: "bg-amber-100 text-amber-600",
                   },
                 ].map((service, index) => (
                   <motion.div
@@ -519,13 +564,9 @@ export default function Home() {
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.5, delay: index * 0.1 }}
                   >
-                    <Image
-                      src={service.icon || "/placeholder.svg"}
-                      alt={service.title}
-                      width={64}
-                      height={64}
-                      className="w-16 h-16 mb-4"
-                    />
+                    <div className={`w-16 h-16 rounded-full ${service.color} flex items-center justify-center mb-4`}>
+                      <service.icon size={32} />
+                    </div>
                     <h3 className="text-xl font-semibold mb-2 text-gray-900">{service.title}</h3>
                     <p className="text-gray-600">{service.description}</p>
                   </motion.div>
@@ -539,9 +580,9 @@ export default function Home() {
         <section id="doctors" className="py-20 bg-gray-50">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <motion.div
-              ref={ref}
+              ref={doctorsRef}
               initial="hidden"
-              animate={controls}
+              animate={doctorsControls}
               variants={{
                 visible: { opacity: 1, y: 0 },
                 hidden: { opacity: 0, y: 50 },
@@ -632,52 +673,43 @@ export default function Home() {
         <section id="about" className="py-20 bg-gray-50">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <motion.div
-              ref={ref}
+              ref={aboutRef}
               initial="hidden"
-              animate={controls}
+              animate={aboutControls}
               variants={{
                 visible: { opacity: 1, y: 0 },
                 hidden: { opacity: 0, y: 50 },
               }}
               transition={{ duration: 0.5, delay: 0.2 }}
             >
-              <div className="flex flex-col md:flex-row items-center gap-12">
-                <div className="md:w-1/2">
-                  <Image
-                    src="/images/about-mcare.jpg"
-                    alt="About Mcare"
-                    width={600}
-                    height={400}
-                    className="w-full rounded-2xl shadow-lg mb-6"
-                  />
-                  <h2 className="text-3xl md:text-4xl font-bold mb-6 text-gray-900">About Mcare</h2>
-                  <p className="text-gray-600 text-lg mb-6">
-                    At Mcare, we are committed to revolutionizing healthcare delivery through innovative technology and
-                    compassionate care. Our mission is to make quality healthcare accessible to everyone, anytime,
-                    anywhere.
-                  </p>
-                  <p className="text-gray-600 text-lg mb-6">
-                    We envision a world where healthcare is seamlessly integrated into everyday life, empowering
-                    individuals to take control of their well-being and live healthier, happier lives.
-                  </p>
-                  <motion.button
-                    className="bg-blue-600 text-white px-6 py-3 rounded-full hover:bg-blue-700 transition-colors duration-300"
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={() => setIsAboutModalOpen(true)}
-                  >
-                    Learn More About Us
-                  </motion.button>
+              <div className="text-center max-w-3xl mx-auto">
+                <div className="flex justify-center mb-8">
+                  <div className="w-20 h-20 rounded-full bg-blue-100 flex items-center justify-center">
+                    <Heart className="w-10 h-10 text-blue-600" />
+                  </div>
                 </div>
-                <div className="md:w-1/2">
-                  <Image
-                    src="/images/about-team.jpg"
-                    alt="Mcare Team"
-                    width={600}
-                    height={400}
-                    className="w-full rounded-2xl shadow-lg"
-                  />
-                </div>
+                <h2 className="text-3xl md:text-4xl font-bold mb-6 text-gray-900">About Mcare</h2>
+                <p className="text-gray-600 text-lg mb-6">
+                  Hi, I'm Rajan, a TY BSC IT student (2025) who created this project for my TYIT PROJECT. Mcare
+                  represents my vision to revolutionize healthcare delivery through innovative technology and
+                  compassionate care.
+                </p>
+                <p className="text-gray-600 text-lg mb-6">
+                  In the future, I plan to implement advanced technologies to enhance the platform with features like
+                  real-time messaging, AI-powered diagnostics, and seamless integration with wearable health devices.
+                </p>
+                <p className="text-gray-600 text-lg mb-8">
+                  My goal is to make quality healthcare accessible to everyone, anytime, anywhere, empowering
+                  individuals to take control of their well-being and live healthier, happier lives.
+                </p>
+                <motion.button
+                  className="bg-blue-600 text-white px-6 py-3 rounded-full hover:bg-blue-700 transition-colors duration-300"
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => setIsAboutModalOpen(true)}
+                >
+                  Learn More About Us
+                </motion.button>
               </div>
             </motion.div>
           </div>
@@ -687,9 +719,9 @@ export default function Home() {
         <section id="contact" className="py-20">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <motion.div
-              ref={ref}
+              ref={contactRef}
               initial="hidden"
-              animate={controls}
+              animate={contactControls}
               variants={{
                 visible: { opacity: 1, y: 0 },
                 hidden: { opacity: 0, y: 50 },
@@ -703,15 +735,15 @@ export default function Home() {
                   <ul className="space-y-4">
                     <li className="flex items-center text-gray-600">
                       <Phone className="w-6 h-6 mr-2 text-blue-600" />
-                      +1 (555) 123-4567
+                      +91 8452877657
                     </li>
                     <li className="flex items-center text-gray-600">
                       <Mail className="w-6 h-6 mr-2 text-blue-600" />
-                      contact@mcare.com
+                      g22.rajan.vinod@gnkhalsa.edu.in
                     </li>
                     <li className="flex items-center text-gray-600">
                       <MapPin className="w-6 h-6 mr-2 text-blue-600" />
-                      123 Healthcare Ave, Medical City, HC 12345
+                      Guru nanak Khalsa College Matunga Mumbai -400019
                     </li>
                   </ul>
                 </div>
@@ -766,7 +798,7 @@ export default function Home() {
 
       <footer className="bg-gray-900 text-white py-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             <div>
               <h3 className="text-xl font-semibold mb-4">Mcare</h3>
               <p className="text-gray-400">Revolutionizing healthcare through technology and compassion.</p>
@@ -807,23 +839,6 @@ export default function Home() {
                 </li>
               </ul>
             </div>
-            <div>
-              <h3 className="text-xl font-semibold mb-4">Follow Us</h3>
-              <div className="flex space-x-4">
-                <a href="#" className="text-gray-400 hover:text-white transition-colors duration-300">
-                  <Facebook className="w-6 h-6" />
-                </a>
-                <a href="#" className="text-gray-400 hover:text-white transition-colors duration-300">
-                  <Twitter className="w-6 h-6" />
-                </a>
-                <a href="#" className="text-gray-400 hover:text-white transition-colors duration-300">
-                  <Instagram className="w-6 h-6" />
-                </a>
-                <a href="#" className="text-gray-400 hover:text-white transition-colors duration-300">
-                  <Linkedin className="w-6 h-6" />
-                </a>
-              </div>
-            </div>
           </div>
           <div className="mt-8 pt-8 border-t border-gray-800 text-center">
             <p className="text-gray-400">&copy; 2023 Mcare. All rights reserved.</p>
@@ -834,20 +849,24 @@ export default function Home() {
       <Modal isOpen={isAboutModalOpen} onClose={() => setIsAboutModalOpen(false)}>
         <h2 className="text-2xl font-bold mb-4">About Mcare</h2>
         <p className="mb-4">
-          Mcare is at the forefront of digital healthcare innovation. Our platform connects patients with qualified
-          healthcare professionals, making quality medical care accessible to everyone, anywhere, at any time.
+          Mcare is a healthcare platform developed by Rajan, a TY BSC IT student, as part of the TYIT PROJECT for the
+          2025 batch. This project aims to be at the forefront of digital healthcare innovation by connecting patients
+          with qualified healthcare professionals.
         </p>
         <p className="mb-4">
-          Founded in 2024, Mcare has quickly grown to become a trusted name in telemedicine. We work with a network of
-          verified, experienced doctors across various specialties to ensure that our users receive the best possible
-          care.
+          The platform was developed with a focus on making quality medical care accessible to everyone, anywhere, at
+          any time. Future enhancements will include advanced messaging systems, AI-powered health recommendations, and
+          integration with modern health monitoring devices.
         </p>
         <p className="mb-4">
-          Our mission goes beyond just providing medical consultations. We aim to empower individuals to take control of
-          their health through education, preventive care, and ongoing support. With Mcare, you are not just a patient -
-          you are a partner in your own healthcare journey.
+          The mission of Mcare goes beyond just providing medical consultations. It aims to empower individuals to take
+          control of their health through education, preventive care, and ongoing support. With Mcare, you are not just
+          a patient - you are a partner in your own healthcare journey.
         </p>
-        <p>Join us in revolutionizing healthcare delivery and experience the future of medicine today with Mcare.</p>
+        <p>
+          This project demonstrates the potential of technology in revolutionizing healthcare delivery and provides a
+          glimpse into the future of medicine.
+        </p>
       </Modal>
 
       <PrivacyPolicyModal isOpen={isPrivacyPolicyOpen} onClose={() => setIsPrivacyPolicyOpen(false)} />

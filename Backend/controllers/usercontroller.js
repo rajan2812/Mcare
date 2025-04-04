@@ -146,7 +146,7 @@ const registerUser = async (req, res) => {
   try {
     console.log("Registration request received:", {
       ...req.body,
-      password: "[HIDDEN]", // Don't log password
+      password: "[HIDDEN]",
     })
 
     const { firstName, lastName, email, password, userType, otp } = req.body
@@ -187,14 +187,17 @@ const registerUser = async (req, res) => {
 
     // Create user in MongoDB
     const UserModel = userType.toLowerCase() === "patient" ? PatientUser : DoctorUser
-    const newUser = await UserModel.create({
+    const userData = {
       firstName,
       lastName,
       email,
       password: hashedPassword,
       avatarUrl: "/placeholder.svg",
       isProfileCompleted: userType.toLowerCase() === "patient", // Set to false for doctors
-    })
+      verificationStatus: userType.toLowerCase() === "doctor" ? "pending" : undefined,
+    }
+
+    const newUser = await UserModel.create(userData)
 
     console.log("User created successfully:", {
       id: newUser._id,
@@ -205,16 +208,8 @@ const registerUser = async (req, res) => {
     // Create token
     const token = createToken(newUser._id)
 
-    // CHANGE: Updated redirection logic for doctor registration
-    // - Doctors who haven't completed their profile are sent to complete-profile
-    // - Doctors who have completed their profile are sent to main dashboard
-    // - Patients are sent to their dashboard as before
-    const redirectPath =
-      userType === "Doctor" && !newUser.isProfileCompleted
-        ? "/doctor-dashboard/complete-profile"
-        : userType === "Doctor"
-          ? "/doctor-dashboard" // Changed from /doctor-dashboard/dashboard
-          : "/patient-dashboard/dashboard"
+    // Set redirect path based on user type
+    const redirectPath = userType === "Doctor" ? "/doctor-dashboard/complete-profile" : "/patient-dashboard"
 
     res.status(201).json({
       success: true,
@@ -228,8 +223,9 @@ const registerUser = async (req, res) => {
         userType,
         avatarUrl: "/placeholder.svg",
         isProfileCompleted: newUser.isProfileCompleted,
+        verificationStatus: newUser.verificationStatus,
       },
-      redirectPath, // Added redirectPath to response
+      redirectPath,
     })
   } catch (error) {
     console.error("Registration error:", error)
@@ -248,7 +244,7 @@ const loginUser = async (req, res) => {
     const UserModel = userType === "patient" ? PatientUser : DoctorUser
 
     // Find user
-    const user = await UserModel.findOne({ email })
+    const user = await UserModel.findOne({ email }).select("+password")
 
     if (!user) {
       return res.status(401).json({
@@ -270,29 +266,42 @@ const loginUser = async (req, res) => {
     // Create token
     const token = createToken(user._id)
 
+    // Determine redirect URL based on user type and profile status
+    let redirectUrl = "/patient-dashboard"
+    if (userType === "doctor") {
+      redirectUrl = user.isProfileCompleted ? "/doctor-dashboard" : "/doctor-dashboard/complete-profile"
+    }
+
     // Prepare user data to send
     const userData = {
       id: user._id,
       firstName: user.firstName,
       lastName: user.lastName,
       email: user.email,
-      dateOfBirth: user.dateOfBirth, // Add this line
+      dateOfBirth: user.dateOfBirth,
       userType: userType,
       avatarUrl: user.avatarUrl,
-      // Add other non-sensitive user data as needed
+      isProfileCompleted: user.isProfileCompleted || false,
+      verificationStatus: user.verificationStatus || "pending",
+      specializations: user.specializations || [],
+      qualifications: user.qualifications || "",
+      experience: user.experience || "",
+      licenseNumber: user.licenseNumber || "",
     }
 
     // Set session
     req.session.user = userData
 
-    // CHANGE: Updated login redirection logic
-    // - Doctors are now redirected to /doctor-dashboard instead of /doctor-dashboard/dashboard
-    // - Patient route remains unchanged at /patient-dashboard/dashboard
+    console.log("Login response:", {
+      userData,
+      redirectUrl,
+    })
+
     res.status(200).json({
       success: true,
       token,
       user: userData,
-      redirectUrl: userType === "doctor" ? "/doctor-dashboard" : "/patient-dashboard/dashboard",
+      redirectUrl,
     })
   } catch (error) {
     console.error("Login error:", error)
@@ -635,6 +644,55 @@ const completeProfile = async (req, res) => {
 
     await doctor.save()
 
+    console.log(`Profile completed for doctor: ${doctor._id}`)
+
+    res.status(200).json({
+      success: true,
+      message: "Profile completed successfully",
+      user: {
+        id: doctor._id,
+        email: doctor.email,
+        firstName: doctor.firstName,
+        lastName: doctor.lastName,
+        userType: "doctor",
+        avatarUrl: doctor.avatarUrl,
+        isProfileCompleted: doctor.isProfileCompleted,
+        verificationStatus: doctor.verificationStatus,
+      },
+    })
+  } catch (error) {
+    console.error("Complete profile error:", error)
+    res.status(500).json({
+      success: false,
+      message: error.message || "Error completing profile",
+    })
+  }
+}
+
+const completeDoctorProfile = async (req, res) => {
+  try {
+    const { licenseNumber, specialization, qualifications, experience } = req.body
+    const userId = req.user.id
+
+    // Find the doctor user
+    const doctor = await DoctorUser.findById(userId)
+
+    if (!doctor) {
+      return res.status(404).json({
+        success: false,
+        message: "Doctor not found",
+      })
+    }
+
+    // Update doctor's profile
+    doctor.licenseNumber = licenseNumber
+    doctor.specialization = specialization
+    doctor.qualifications = qualifications
+    doctor.experience = experience
+    doctor.isProfileCompleted = true
+
+    await doctor.save()
+
     res.status(200).json({
       success: true,
       message: "Profile completed successfully",
@@ -649,10 +707,46 @@ const completeProfile = async (req, res) => {
       },
     })
   } catch (error) {
-    console.error("Complete profile error:", error)
+    console.error("Complete doctor profile error:", error)
     res.status(500).json({
       success: false,
-      message: error.message || "Error completing profile",
+      message: error.message || "Error completing doctor profile",
+    })
+  }
+}
+
+// Add this new function to handle verification status checks
+const getVerificationStatus = async (req, res) => {
+  try {
+    const userId = req.user.id
+    const doctor = await DoctorUser.findById(userId)
+
+    if (!doctor) {
+      return res.status(404).json({
+        success: false,
+        message: "Doctor not found",
+      })
+    }
+
+    // Log the verification status being sent
+    console.log("Sending verification status:", {
+      userId,
+      status: doctor.verificationStatus,
+      timestamp: new Date().toISOString(),
+    })
+
+    res.json({
+      success: true,
+      verificationStatus: doctor.verificationStatus,
+      verificationRemarks: doctor.verificationRemarks,
+      verifiedAt: doctor.verifiedAt,
+    })
+  } catch (error) {
+    console.error("Error fetching verification status:", error)
+    res.status(500).json({
+      success: false,
+      message: "Error fetching verification status",
+      error: error.message,
     })
   }
 }
@@ -667,5 +761,7 @@ export {
   uploadProfilePicture,
   removeProfilePicture,
   completeProfile,
+  completeDoctorProfile,
+  getVerificationStatus,
 }
 

@@ -1,5 +1,7 @@
 "use client"
 
+import type React from "react"
+
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { motion } from "framer-motion"
@@ -86,6 +88,60 @@ const Login = () => {
     }
   }
 
+  // Handle login
+  const handleLogin = async (userType: "patient" | "doctor" | "admin") => {
+    setError("")
+    setLoading(true)
+
+    try {
+      const response = await fetch(`${API_URL}/${userType === "admin" ? "admin/login" : "login"}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email,
+          password,
+          userType: userType.toLowerCase(),
+        }),
+        credentials: "include",
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.message || "Login failed")
+      }
+
+      if (data.success) {
+        // Store token and user data
+        localStorage.setItem("token", data.token)
+        localStorage.setItem("user", JSON.stringify(data.user))
+        localStorage.setItem("isLoggedIn", "true")
+
+        // Force a small delay to ensure localStorage is updated
+        await new Promise((resolve) => setTimeout(resolve, 100))
+
+        // Redirect based on user type and profile completion status
+        const dashboardPath =
+          userType === "admin"
+            ? "/admin-dashboard"
+            : userType === "doctor" && !data.user.isProfileCompleted
+              ? "/doctor-dashboard/complete-profile"
+              : `/${userType}-dashboard`
+
+        router.push(dashboardPath)
+      } else {
+        throw new Error(data.message || "Login failed")
+      }
+    } catch (error: any) {
+      console.error("Login error:", error)
+      setError(error.message || "An error occurred during login")
+    } finally {
+      setLoading(false)
+    }
+  }
+
   // Handle form submission (Login/Register)
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -95,40 +151,7 @@ const Login = () => {
     try {
       if (isLogin) {
         // Login flow
-        const response = await fetch(`${API_URL}/login`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            email,
-            password,
-            userType: userType.toLowerCase(),
-          }),
-          credentials: "include",
-        })
-
-        const data = await response.json()
-
-        if (!response.ok) {
-          throw new Error(data.message || "Login failed")
-        }
-
-        if (data.success) {
-          // Store token and user data
-          localStorage.setItem("token", data.token)
-          localStorage.setItem("user", JSON.stringify(data.user))
-          localStorage.setItem("isLoggedIn", "true")
-
-          // Force a small delay to ensure localStorage is updated
-          await new Promise((resolve) => setTimeout(resolve, 100))
-
-          // Redirect based on user type
-          const dashboardPath = `/${userType.toLowerCase()}-dashboard`
-          router.push(dashboardPath)
-        } else {
-          throw new Error(data.message || "Login failed")
-        }
+        handleLogin(userType.toLowerCase() as "patient" | "doctor" | "admin")
       } else {
         // Registration flow
         if (!showOtpInput) {
@@ -430,30 +453,73 @@ const Login = () => {
             </motion.p>
 
             <div className="flex justify-center mb-6">
-              <button
-                className={`px-6 py-2 w-1/2 ${
-                  isLogin ? "bg-blue-500 text-white" : "bg-gray-200 text-gray-700"
-                } rounded-l-full focus:outline-none transition-colors duration-300 ease-in-out`}
-                onClick={() => {
-                  setIsLogin(true)
-                  setShowOtpInput(false)
-                  setOtpSent(false)
-                }}
-              >
-                Login
-              </button>
-              <button
-                className={`px-6 py-2 w-1/2 ${
-                  !isLogin ? "bg-blue-500 text-white" : "bg-gray-200 text-gray-700"
-                } rounded-r-full focus:outline-none transition-colors duration-300 ease-in-out`}
-                onClick={() => {
-                  setIsLogin(false)
-                  setShowOtpInput(false)
-                  setOtpSent(false)
-                }}
-              >
-                Sign Up
-              </button>
+              {isLogin ? (
+                <>
+                  <button
+                    className={`px-6 py-2 w-1/3 ${
+                      userType === "Patient" ? "bg-blue-500 text-white" : "bg-gray-200 text-gray-700"
+                    } rounded-l-full focus:outline-none transition-colors duration-300 ease-in-out`}
+                    onClick={() => {
+                      setUserType("Patient")
+                      setShowOtpInput(false)
+                      setOtpSent(false)
+                    }}
+                  >
+                    Patient
+                  </button>
+                  <button
+                    className={`px-6 py-2 w-1/3 ${
+                      userType === "Doctor" ? "bg-blue-500 text-white" : "bg-gray-200 text-gray-700"
+                    } focus:outline-none transition-colors duration-300 ease-in-out`}
+                    onClick={() => {
+                      setUserType("Doctor")
+                      setShowOtpInput(false)
+                      setOtpSent(false)
+                    }}
+                  >
+                    Doctor
+                  </button>
+                  <button
+                    className={`px-6 py-2 w-1/3 ${
+                      userType === "Admin" ? "bg-blue-500 text-white" : "bg-gray-200 text-gray-700"
+                    } rounded-r-full focus:outline-none transition-colors duration-300 ease-in-out`}
+                    onClick={() => {
+                      setUserType("Admin")
+                      setShowOtpInput(false)
+                      setOtpSent(false)
+                    }}
+                  >
+                    Admin
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    className={`px-6 py-2 w-1/2 ${
+                      userType === "Patient" ? "bg-blue-500 text-white" : "bg-gray-200 text-gray-700"
+                    } rounded-l-full focus:outline-none transition-colors duration-300 ease-in-out`}
+                    onClick={() => {
+                      setUserType("Patient")
+                      setShowOtpInput(false)
+                      setOtpSent(false)
+                    }}
+                  >
+                    Patient
+                  </button>
+                  <button
+                    className={`px-6 py-2 w-1/2 ${
+                      userType === "Doctor" ? "bg-blue-500 text-white" : "bg-gray-200 text-gray-700"
+                    } rounded-r-full focus:outline-none transition-colors duration-300 ease-in-out`}
+                    onClick={() => {
+                      setUserType("Doctor")
+                      setShowOtpInput(false)
+                      setOtpSent(false)
+                    }}
+                  >
+                    Doctor
+                  </button>
+                </>
+              )}
             </div>
 
             <motion.div
@@ -466,27 +532,6 @@ const Login = () => {
               <form onSubmit={handleSubmit} className="space-y-4">
                 {isLogin ? (
                   <>
-                    <div className="flex justify-center mb-6">
-                      <button
-                        type="button"
-                        className={`flex-1 px-4 py-2 ${
-                          userType === "Patient" ? "bg-blue-500 text-white" : "bg-gray-200 text-gray-700"
-                        } rounded-l-full focus:outline-none transition-colors duration-300 ease-in-out`}
-                        onClick={() => setUserType("Patient")}
-                      >
-                        Patient
-                      </button>
-                      <button
-                        type="button"
-                        className={`flex-1 px-4 py-2 ${
-                          userType === "Doctor" ? "bg-blue-500 text-white" : "bg-gray-200 text-gray-700"
-                        } rounded-r-full focus:outline-none transition-colors duration-300 ease-in-out`}
-                        onClick={() => setUserType("Doctor")}
-                      >
-                        Doctor
-                      </button>
-                    </div>
-
                     <div className="space-y-2">
                       <label htmlFor="email" className="block text-gray-700 text-sm font-semibold">
                         Email
@@ -636,27 +681,6 @@ const Login = () => {
                             </div>
                           </div>
                         )}
-
-                        <div className="flex justify-center">
-                          <button
-                            type="button"
-                            className={`flex-1 px-4 py-2 ${
-                              userType === "Patient" ? "bg-blue-500 text-white" : "bg-gray-200 text-gray-700"
-                            } rounded-l-full focus:outline-none transition-colors duration-300 ease-in-out`}
-                            onClick={() => setUserType("Patient")}
-                          >
-                            Patient
-                          </button>
-                          <button
-                            type="button"
-                            className={`flex-1 px-4 py-2 ${
-                              userType === "Doctor" ? "bg-blue-500 text-white" : "bg-gray-200 text-gray-700"
-                            } rounded-r-full focus:outline-none transition-colors duration-300 ease-in-out`}
-                            onClick={() => setUserType("Doctor")}
-                          >
-                            Doctor
-                          </button>
-                        </div>
                       </>
                     ) : (
                       <>
@@ -700,20 +724,38 @@ const Login = () => {
                     ? "Processing..."
                     : isLogin
                       ? `Log In as ${userType}`
-                      : !showOtpInput
-                        ? "Get OTP"
-                        : "Complete Registration"}
+                      : showOtpInput
+                        ? "Complete Registration"
+                        : "Sign Up"}
                 </button>
 
                 {error && <div className="text-red-500 text-center text-sm mt-2">{error}</div>}
               </form>
             </motion.div>
 
+            {isLogin ? (
+              <button
+                type="button"
+                onClick={() => setIsLogin(false)}
+                className="w-full mt-4 text-blue-500 hover:text-blue-600"
+              >
+                Don't have an account? Sign Up
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setIsLogin(true)}
+                className="w-full mt-4 text-blue-500 hover:text-blue-600"
+              >
+                Already have an account? Log In
+              </button>
+            )}
+
             {isLogin && (
               <button
                 type="button"
                 onClick={() => setShowForgotPassword(true)}
-                className="w-full mt-4 text-blue-500 hover:text-blue-600"
+                className="w-full mt-2 text-blue-500 hover:text-blue-600"
               >
                 Forgot Password?
               </button>

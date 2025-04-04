@@ -1,194 +1,360 @@
 "use client"
 
-import { useState } from "react"
-import { Check, X, Eye, FileText, Plus } from "lucide-react"
+import { useState, useEffect } from "react"
+import { Search, Filter, Eye } from "lucide-react"
+import { useToast } from "@/components/ui/use-toast"
 import { Button } from "@/components/ui/button"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Badge } from "@/components/ui/badge"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import type { Doctor } from "@/types"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Badge } from "@/components/ui/badge"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { ScrollArea } from "@/components/ui/scroll-area"
 
-const initialDoctors: Doctor[] = [
-  {
-    id: "1",
-    name: "Dr. Sarah Smith",
-    email: "sarah.smith@example.com",
-    phone: "+1 (555) 123-4567",
-    address: "123 Medical St, Healthville, HV 12345",
-    speciality: "Cardiology",
-    licenseNumber: "MED12345",
-    status: "Pending",
-  },
-  {
-    id: "2",
-    name: "Dr. John Doe",
-    email: "john.doe@example.com",
-    phone: "+1 (555) 987-6543",
-    address: "456 Doctor Ave, Wellness City, WC 67890",
-    speciality: "Pediatrics",
-    licenseNumber: "MED67890",
-    status: "Pending",
-  },
-  // Add more doctors as needed
-]
+interface User {
+  _id: string
+  firstName: string
+  lastName: string
+  email: string
+  phone?: string
+  createdAt: string
+  status?: string
+  verificationStatus?: string
+  specializations?: string[]
+  patientId?: string
+  licenseNumber?: string
+  isProfileCompleted?: boolean
+}
 
-export function UserManagement() {
-  const [doctors, setDoctors] = useState<Doctor[]>(initialDoctors)
-  const [selectedDoctor, setSelectedDoctor] = useState<Doctor | null>(null)
-  const [isDialogOpen, setIsDialogOpen] = useState(false)
+export function UsersOverview() {
+  const [activeTab, setActiveTab] = useState("doctors")
+  const [doctors, setDoctors] = useState<User[]>([])
+  const [patients, setPatients] = useState<User[]>([])
+  const [searchQuery, setSearchQuery] = useState("")
+  const [selectedUser, setSelectedUser] = useState<User | null>(null)
+  const [isDetailsOpen, setIsDetailsOpen] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
+  const { toast } = useToast()
 
-  const handleApprove = (id: string) => {
-    setDoctors(doctors.map((doctor) => (doctor.id === id ? { ...doctor, status: "Approved" } : doctor)))
+  useEffect(() => {
+    fetchUsers()
+  }, [])
+
+  const fetchUsers = async () => {
+    try {
+      setIsLoading(true)
+      const token = localStorage.getItem("token")
+
+      // Fetch doctors
+      const doctorsResponse = await fetch("http://localhost:4000/api/admin/doctors", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+      const doctorsData = await doctorsResponse.json()
+
+      // Fetch patients
+      const patientsResponse = await fetch("http://localhost:4000/api/admin/patients", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+      const patientsData = await patientsResponse.json()
+
+      if (doctorsData.success) setDoctors(doctorsData.data)
+      if (patientsData.success) setPatients(patientsData.data)
+    } catch (error) {
+      console.error("Error fetching users:", error)
+      toast({
+        title: "Error",
+        description: "Failed to fetch users",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
+    }
   }
 
-  const handleReject = (id: string) => {
-    setDoctors(doctors.map((doctor) => (doctor.id === id ? { ...doctor, status: "Rejected" } : doctor)))
+  const filteredUsers = (users: User[]) => {
+    return users.filter(
+      (user) =>
+        user.firstName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        user.lastName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        user.email.toLowerCase().includes(searchQuery.toLowerCase()),
+    )
+  }
+
+  const handleViewDetails = async (user: User) => {
+    try {
+      const token = localStorage.getItem("token")
+      const endpoint = `http://localhost:4000/api/admin/${activeTab === "doctors" ? "doctors" : "patients"}/${user._id}`
+
+      const response = await fetch(endpoint, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+      const data = await response.json()
+
+      if (data.success) {
+        setSelectedUser(data.data)
+        setIsDetailsOpen(true)
+      }
+    } catch (error) {
+      console.error("Error fetching user details:", error)
+      toast({
+        title: "Error",
+        description: "Failed to fetch user details",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const renderUserDetails = () => {
+    if (!selectedUser) return null
+
+    const isDoctor = activeTab === "doctors"
+
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center space-x-4">
+          <Avatar className="h-20 w-20">
+            <AvatarImage src={selectedUser.avatarUrl || "/placeholder.svg"} />
+            <AvatarFallback>
+              {selectedUser.firstName[0]}
+              {selectedUser.lastName[0]}
+            </AvatarFallback>
+          </Avatar>
+          <div>
+            <h3 className="text-xl font-semibold">
+              {selectedUser.firstName} {selectedUser.lastName}
+            </h3>
+            <p className="text-sm text-muted-foreground">{selectedUser.email}</p>
+          </div>
+        </div>
+
+        <div className="grid gap-4">
+          {isDoctor ? (
+            <>
+              <div className="grid gap-2">
+                <h4 className="font-semibold">Specializations</h4>
+                <div className="flex flex-wrap gap-2">
+                  {selectedUser.specializations?.map((spec) => (
+                    <Badge key={spec} variant="secondary">
+                      {spec}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+              <div className="grid gap-2">
+                <h4 className="font-semibold">License Number</h4>
+                <p>{selectedUser.licenseNumber}</p>
+              </div>
+              <div className="grid gap-2">
+                <h4 className="font-semibold">Verification Status</h4>
+                <Badge
+                  variant={
+                    selectedUser.verificationStatus === "approved"
+                      ? "success"
+                      : selectedUser.verificationStatus === "rejected"
+                        ? "destructive"
+                        : "secondary"
+                  }
+                >
+                  {selectedUser.verificationStatus}
+                </Badge>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="grid gap-2">
+                <h4 className="font-semibold">Patient ID</h4>
+                <p>{selectedUser.patientId}</p>
+              </div>
+            </>
+          )}
+
+          <div className="grid gap-2">
+            <h4 className="font-semibold">Contact Information</h4>
+            <p>Phone: {selectedUser.phone || "Not provided"}</p>
+          </div>
+
+          <div className="grid gap-2">
+            <h4 className="font-semibold">Account Created</h4>
+            <p>{new Date(selectedUser.createdAt).toLocaleDateString()}</p>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex justify-between items-center">
-        <h3 className="text-lg font-semibold">Doctor Registrations</h3>
-        <Button className="bg-[#4169E1] hover:bg-[#4169E1]/90">
-          <Plus className="mr-2 h-4 w-4" /> Add New Doctor
-        </Button>
-      </div>
-      <div className="rounded-lg border bg-white overflow-hidden">
-        <Table>
-          <TableHeader>
-            <TableRow className="bg-gray-50">
-              <TableHead className="font-semibold">Name</TableHead>
-              <TableHead className="font-semibold">Specialty</TableHead>
-              <TableHead className="font-semibold">License Number</TableHead>
-              <TableHead className="font-semibold">Status</TableHead>
-              <TableHead className="font-semibold">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {doctors.map((doctor) => (
-              <TableRow key={doctor.id}>
-                <TableCell className="font-medium">{doctor.name}</TableCell>
-                <TableCell>{doctor.speciality}</TableCell>
-                <TableCell>{doctor.licenseNumber}</TableCell>
-                <TableCell>
-                  <Badge
-                    variant={
-                      doctor.status === "Approved"
-                        ? "success"
-                        : doctor.status === "Rejected"
-                          ? "destructive"
-                          : "secondary"
-                    }
-                  >
-                    {doctor.status}
-                  </Badge>
-                </TableCell>
-                <TableCell>
-                  <div className="flex space-x-2">
-                    <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                      <DialogTrigger asChild>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setSelectedDoctor(doctor)}
-                          className="text-[#4169E1] border-[#4169E1]"
-                        >
-                          <Eye className="h-4 w-4 mr-1" />
-                          View
-                        </Button>
-                      </DialogTrigger>
-                      <DialogContent>
-                        <DialogHeader>
-                          <DialogTitle>Doctor Details</DialogTitle>
-                          <DialogDescription>Review the doctors information and documents.</DialogDescription>
-                        </DialogHeader>
-                        {selectedDoctor && (
-                          <div className="grid gap-4 py-4">
-                            <div className="grid grid-cols-4 items-center gap-4">
-                              <Label htmlFor="name" className="text-right">
-                                Name
-                              </Label>
-                              <Input id="name" value={selectedDoctor.name} className="col-span-3" readOnly />
+    <Card>
+      <CardHeader>
+        <CardTitle>Users Overview</CardTitle>
+        <CardDescription>Manage and view all doctors and patients in the system.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+          <div className="flex items-center justify-between">
+            <TabsList>
+              <TabsTrigger value="doctors">Doctors</TabsTrigger>
+              <TabsTrigger value="patients">Patients</TabsTrigger>
+            </TabsList>
+            <div className="flex items-center space-x-2">
+              <div className="relative">
+                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search users..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-8"
+                />
+              </div>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="icon">
+                    <Filter className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem>Sort by Name</DropdownMenuItem>
+                  <DropdownMenuItem>Sort by Date</DropdownMenuItem>
+                  <DropdownMenuItem>Sort by Status</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          </div>
+
+          <TabsContent value="doctors" className="border rounded-lg">
+            <ScrollArea className="h-[600px]">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Specialization</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>License</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredUsers(doctors).map((doctor) => (
+                    <TableRow key={doctor._id}>
+                      <TableCell>
+                        <div className="flex items-center space-x-3">
+                          <Avatar>
+                            <AvatarImage src={doctor.avatarUrl || "/placeholder.svg"} />
+                            <AvatarFallback>
+                              {doctor.firstName[0]}
+                              {doctor.lastName[0]}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <div className="font-medium">
+                              {doctor.firstName} {doctor.lastName}
                             </div>
-                            <div className="grid grid-cols-4 items-center gap-4">
-                              <Label htmlFor="email" className="text-right">
-                                Email
-                              </Label>
-                              <Input id="email" value={selectedDoctor.email} className="col-span-3" readOnly />
-                            </div>
-                            <div className="grid grid-cols-4 items-center gap-4">
-                              <Label htmlFor="phone" className="text-right">
-                                Phone
-                              </Label>
-                              <Input id="phone" value={selectedDoctor.phone} className="col-span-3" readOnly />
-                            </div>
-                            <div className="grid grid-cols-4 items-center gap-4">
-                              <Label htmlFor="speciality" className="text-right">
-                                Specialty
-                              </Label>
-                              <Input
-                                id="speciality"
-                                value={selectedDoctor.speciality}
-                                className="col-span-3"
-                                readOnly
-                              />
-                            </div>
-                            <div className="grid grid-cols-4 items-center gap-4">
-                              <Label htmlFor="license" className="text-right">
-                                License Number
-                              </Label>
-                              <Input
-                                id="license"
-                                value={selectedDoctor.licenseNumber}
-                                className="col-span-3"
-                                readOnly
-                              />
-                            </div>
-                            <div className="flex items-center space-x-2">
-                              <FileText className="h-4 w-4" />
-                              <span>View Uploaded Documents</span>
-                            </div>
+                            <div className="text-sm text-muted-foreground">{doctor.email}</div>
                           </div>
-                        )}
-                      </DialogContent>
-                    </Dialog>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleApprove(doctor.id)}
-                      disabled={doctor.status !== "Pending"}
-                      className="text-green-600 border-green-600 hover:bg-green-50"
-                    >
-                      <Check className="h-4 w-4 mr-1" />
-                      Approve
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleReject(doctor.id)}
-                      disabled={doctor.status !== "Pending"}
-                      className="text-red-600 border-red-600 hover:bg-red-50"
-                    >
-                      <X className="h-4 w-4 mr-1" />
-                      Reject
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
-    </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-wrap gap-1">
+                          {doctor.specializations?.slice(0, 2).map((spec) => (
+                            <Badge key={spec} variant="outline">
+                              {spec}
+                            </Badge>
+                          ))}
+                          {(doctor.specializations?.length || 0) > 2 && (
+                            <Badge variant="outline">+{doctor.specializations!.length - 2}</Badge>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={
+                            doctor.verificationStatus === "approved"
+                              ? "success"
+                              : doctor.verificationStatus === "rejected"
+                                ? "destructive"
+                                : "secondary"
+                          }
+                        >
+                          {doctor.verificationStatus}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>{doctor.licenseNumber}</TableCell>
+                      <TableCell>
+                        <Button variant="ghost" size="icon" onClick={() => handleViewDetails(doctor)}>
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </ScrollArea>
+          </TabsContent>
+
+          <TabsContent value="patients" className="border rounded-lg">
+            <ScrollArea className="h-[600px]">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Patient ID</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Joined</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredUsers(patients).map((patient) => (
+                    <TableRow key={patient._id}>
+                      <TableCell>
+                        <div className="flex items-center space-x-3">
+                          <Avatar>
+                            <AvatarImage src={patient.avatarUrl || "/placeholder.svg"} />
+                            <AvatarFallback>
+                              {patient.firstName[0]}
+                              {patient.lastName[0]}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="font-medium">
+                            {patient.firstName} {patient.lastName}
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>{patient.patientId}</TableCell>
+                      <TableCell>{patient.email}</TableCell>
+                      <TableCell>{new Date(patient.createdAt).toLocaleDateString()}</TableCell>
+                      <TableCell>
+                        <Button variant="ghost" size="icon" onClick={() => handleViewDetails(patient)}>
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </ScrollArea>
+          </TabsContent>
+        </Tabs>
+
+        <Dialog open={isDetailsOpen} onOpenChange={setIsDetailsOpen}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>User Details</DialogTitle>
+              <DialogDescription>Detailed information about the selected {activeTab.slice(0, -1)}.</DialogDescription>
+            </DialogHeader>
+            {renderUserDetails()}
+          </DialogContent>
+        </Dialog>
+      </CardContent>
+    </Card>
   )
 }
 

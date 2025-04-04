@@ -5,15 +5,30 @@ import {
   resetPassword,
   registerUser,
   updateProfile,
-  uploadProfilePicture,
   removeProfilePicture,
+  completeDoctorProfile,
 } from "../controllers/usercontroller.js"
 import { protectRoute, authenticateToken } from "../middleware/authMiddleware.js"
 import { PatientUser, DoctorUser } from "../model/usermodal.js"
 import { getPatientDashboardData } from "../controllers/patientDashboardController.js"
-import { checkAuth } from "../controllers/authController.js"
-import bcrypt from "bcrypt" // Import bcrypt
-import jwt from "jsonwebtoken" // Import jsonwebtoken
+import { checkAuth, adminLogin } from "../controllers/authController.js"
+import { completeProfile } from "../controllers/doctorProfileController.js"
+import bcrypt from "bcrypt"
+import jwt from "jsonwebtoken"
+import { cloudinary } from "../config/cloudinary.js"
+import multer from "multer"
+import { CloudinaryStorage } from "multer-storage-cloudinary"
+
+const storage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: "mcare_uploads",
+    allowed_formats: ["jpg", "png", "pdf", "doc", "docx"],
+    resource_type: "auto",
+  },
+})
+
+const upload = multer({ storage: storage })
 
 const createToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET, {
@@ -81,7 +96,7 @@ userRouter.post("/login", async (req, res) => {
       firstName: user.firstName,
       lastName: user.lastName,
       email: user.email,
-      patientId: user.patientId, // Assuming this field exists
+      patientId: user.patientId,
       dateOfBirth: user.dateOfBirth,
       gender: user.gender,
       phone: user.phone,
@@ -112,7 +127,48 @@ userRouter.post("/forgot-password", forgotPassword)
 userRouter.post("/reset-password", resetPassword)
 
 // Protected route for uploading profile picture
-userRouter.post("/upload-profile-picture", authenticateToken, uploadProfilePicture)
+userRouter.post("/upload-profile-picture", authenticateToken, upload.single("profilePicture"), async (req, res) => {
+  try {
+    const userId = req.user.id
+    const file = req.file
+
+    if (!file) {
+      return res.status(400).json({ success: false, message: "No file uploaded" })
+    }
+
+    const UserModel = req.user.userType === "patient" ? PatientUser : DoctorUser
+    const user = await UserModel.findById(userId)
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found" })
+    }
+
+    // Update user's avatar URL with Cloudinary URL
+    user.avatarUrl = file.path
+    await user.save()
+
+    res.json({ success: true, avatarUrl: user.avatarUrl })
+  } catch (error) {
+    console.error("Profile picture upload error:", error)
+    res.status(500).json({ success: false, message: "Error uploading profile picture", error: error.message })
+  }
+})
+
+// New route for general file upload
+userRouter.post("/upload-file", authenticateToken, upload.single("file"), async (req, res) => {
+  try {
+    const file = req.file
+
+    if (!file) {
+      return res.status(400).json({ success: false, message: "No file uploaded" })
+    }
+
+    res.json({ success: true, fileUrl: file.path })
+  } catch (error) {
+    console.error("File upload error:", error)
+    res.status(500).json({ success: false, message: "Error uploading file", error: error.message })
+  }
+})
 
 // Protected route for removing profile picture
 userRouter.delete("/remove-profile-picture", authenticateToken, removeProfilePicture)
@@ -161,6 +217,39 @@ userRouter.post("/logout", (req, res) => {
       redirectTo: "/login",
     })
   })
+})
+
+// Add the complete-profile route
+userRouter.post("/complete-profile", authenticateToken, completeProfile)
+
+// Add this new route after the existing routes
+userRouter.post("/admin/login", adminLogin)
+userRouter.post("/complete-doctor-profile", authenticateToken, completeDoctorProfile)
+
+// Add this route to get verification status
+userRouter.get("/verification-status", authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id
+    const doctor = await DoctorUser.findById(userId).select("verificationStatus")
+
+    if (!doctor) {
+      return res.status(404).json({
+        success: false,
+        message: "Doctor not found",
+      })
+    }
+
+    res.json({
+      success: true,
+      verificationStatus: doctor.verificationStatus,
+    })
+  } catch (error) {
+    console.error("Error fetching verification status:", error)
+    res.status(500).json({
+      success: false,
+      message: "Error fetching verification status",
+    })
+  }
 })
 
 export default userRouter

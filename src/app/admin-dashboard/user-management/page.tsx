@@ -1,6 +1,6 @@
 "use client"
 
-import { UserManagement } from "../components/users"
+import { UsersOverview } from "../components/users-overview"
 import { Button } from "@/components/ui/button"
 import { ChevronLeft } from "lucide-react"
 import Link from "next/link"
@@ -18,7 +18,7 @@ export default function UserManagementPage() {
       </div>
 
       <div className="bg-white rounded-lg shadow p-6">
-        <UserManagement />
+        <UsersOverview />
       </div>
     </div>
   )

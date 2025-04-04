@@ -50,13 +50,15 @@ const sendOTP = async (req, res) => {
 
     // Generate OTP
     const otp = generateOTP()
-    console.log(`Generated OTP for ${email}: ${otp}`)
+    console.log(`Generated OTP for ${email}:`, otp)
 
     // Store OTP with 5-minute expiry
-    otpStore.set(email, {
+    const otpData = {
       otp,
       expiry: Date.now() + 5 * 60 * 1000, // 5 minutes
-    })
+    }
+    otpStore.set(email, otpData)
+    console.log("Stored OTP data:", { email, otpData })
 
     const emailContent = {
       subject: "Your OTP for Mcare Registration",
@@ -195,9 +197,28 @@ const loginUser = async (req, res) => {
 
 const verifyOTP = (email, otp) => {
   const storedOTPData = otpStore.get(email)
-  if (!storedOTPData || storedOTPData.otp !== otp || Date.now() > storedOTPData.expiry) {
-    return { isValid: false, message: "Invalid or expired OTP" }
+  console.log("Verifying OTP:", { email, inputOTP: otp, storedData: storedOTPData }) // Add logging
+
+  if (!storedOTPData) {
+    console.log("No OTP data found for email:", email)
+    return { isValid: false, message: "No OTP found. Please request a new OTP" }
   }
+
+  if (Date.now() > storedOTPData.expiry) {
+    console.log("OTP expired for email:", email)
+    otpStore.delete(email) // Clean up expired OTP
+    return { isValid: false, message: "OTP has expired. Please request a new OTP" }
+  }
+
+  const isMatch = storedOTPData.otp === otp
+  console.log("OTP match result:", isMatch)
+
+  if (!isMatch) {
+    return { isValid: false, message: "Invalid OTP. Please try again" }
+  }
+
+  // Valid OTP - clean up
+  otpStore.delete(email)
   return { isValid: true }
 }
 

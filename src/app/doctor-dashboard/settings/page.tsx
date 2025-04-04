@@ -12,7 +12,6 @@ import { Switch } from "@/components/ui/switch"
 import { Separator } from "@/components/ui/separator"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -26,27 +25,15 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Toaster } from "@/components/ui/toaster"
 import { useToast } from "@/components/ui/use-toast"
-import {
-  Camera,
-  Trash2,
-  Upload,
-  Edit2,
-  Save,
-  Lock,
-  Shield,
-  UserX,
-  Bell,
-  MessageSquare,
-  Calendar,
-  RefreshCw,
-} from "lucide-react"
+import { Camera, Edit2, Save, Lock, Shield, UserX, Bell, MessageSquare, Calendar, RefreshCw } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 
 // Profile Settings Component
 function ProfileSettings() {
   const [profile, setProfile] = useState({
     doctorId: "",
-    name: "",
+    firstName: "",
+    lastName: "",
     dateOfBirth: "",
     gender: "",
     email: "",
@@ -56,9 +43,16 @@ function ProfileSettings() {
     qualifications: "",
     experience: "",
     consultationFee: "",
-    languages: "", // Changed to string
+    languages: "",
     about: "",
+    clinicAddress: {
+      street: "",
+      city: "",
+      state: "",
+      pincode: "",
+    },
     isVerified: false,
+    licenseNumber: "",
   })
 
   const [avatarUrl, setAvatarUrl] = useState("/placeholder.svg")
@@ -68,50 +62,185 @@ function ProfileSettings() {
   const { toast } = useToast()
 
   useEffect(() => {
-    const doctorData = JSON.parse(localStorage.getItem("doctor") || "{}")
-    if (doctorData) {
+    // Load user data from localStorage
+    const user = JSON.parse(localStorage.getItem("user") || "{}")
+    if (user) {
       setProfile((prevProfile) => ({
         ...prevProfile,
-        ...doctorData,
-        doctorId: doctorData.doctorId || `DR${Math.floor(1000 + Math.random() * 9000)}`,
-        isVerified: doctorData.isVerified || false,
+        doctorId: user.id || `DR${Math.floor(1000 + Math.random() * 9000)}`,
+        firstName: user.firstName || "",
+        lastName: user.lastName || "",
+        email: user.email || "",
+        specializations: user.specializations || [],
+        isVerified: user.isVerified || false,
       }))
-      setAvatarUrl(doctorData.avatarUrl || "/placeholder.svg")
-      setSpecializations(doctorData.specializations || [])
-      setIsVerified(doctorData.isVerified || false)
+      setAvatarUrl(user.avatarUrl || "/placeholder.svg")
+      setSpecializations(user.specializations || [])
+      setIsVerified(user.isVerified || false)
     }
-  }, [])
+
+    // Fetch complete profile data from API
+    const fetchProfileData = async () => {
+      try {
+        const token = localStorage.getItem("token")
+        const user = JSON.parse(localStorage.getItem("user") || "{}")
+
+        console.log("Fetching profile for user:", user.id) // Debug log
+
+        const response = await fetch(`http://localhost:4000/api/doctor/profile/${user.id}`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        })
+
+        if (!response.ok) {
+          throw new Error("Failed to fetch profile data")
+        }
+
+        const data = await response.json()
+        console.log("Received profile data:", data) // Debug log
+
+        if (data.success && data.data) {
+          const profileData = data.data
+
+          // Update the profile state with all the data
+          setProfile((prev) => ({
+            ...prev,
+            doctorId: profileData._id || user.id,
+            firstName: profileData.firstName || "",
+            lastName: profileData.lastName || "",
+            email: profileData.email || "",
+            phone: profileData.phone || "",
+            specializations: profileData.specializations || [],
+            qualifications: profileData.qualifications || "",
+            experience: profileData.experience || "",
+            consultationFee: profileData.consultationFee || "",
+            languages: profileData.languages || "",
+            about: profileData.about || "",
+            clinicAddress: {
+              street: profileData.clinicAddress?.street || "",
+              city: profileData.clinicAddress?.city || "",
+              state: profileData.clinicAddress?.state || "",
+              pincode: profileData.clinicAddress?.pincode || "",
+            },
+            isVerified: profileData.verificationStatus === "approved",
+            licenseNumber: profileData.licenseNumber || "",
+          }))
+
+          // Update other state variables
+          setAvatarUrl(profileData.avatarUrl || "/placeholder.svg")
+          setSpecializations(profileData.specializations || [])
+          setIsVerified(profileData.verificationStatus === "approved")
+
+          console.log("Updated profile state:", profileData) // Debug log
+        }
+      } catch (error) {
+        console.error("Error fetching profile:", error)
+        toast({
+          title: "Error",
+          description: "Failed to load profile data",
+          variant: "destructive",
+        })
+      }
+    }
+
+    fetchProfileData()
+  }, [toast])
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
+
+    if (name.startsWith("clinicAddress.")) {
+      const addressField = name.split(".")[1]
+      setProfile((prev) => ({
+        ...prev,
+        clinicAddress: {
+          ...(prev.clinicAddress ?? {}),
+          [addressField]: value,
+        },
+      }))
+      return
+    }
+
     setProfile((prev) => ({ ...prev, [name]: value }))
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    const updatedProfile = {
-      ...profile,
-      avatarUrl,
-      specializations,
-      isVerified, // Preserve the verified status
+    try {
+      const token = localStorage.getItem("token")
+      const response = await fetch("http://localhost:4000/api/doctor/update-profile", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          ...profile,
+          specializations: profile.specializations,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to update profile")
+      }
+
+      const data = await response.json()
+      if (data.success) {
+        toast({
+          title: "Success",
+          description: "Profile updated successfully",
+        })
+        setIsEditing(false)
+      }
+    } catch (error) {
+      console.error("Error updating profile:", error)
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to update profile",
+        variant: "destructive",
+      })
     }
-    localStorage.setItem("doctor", JSON.stringify(updatedProfile))
-    toast({
-      title: "Success",
-      description: "Profile updated successfully",
-    })
-    setIsEditing(false)
   }
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file) {
-      const imageUrl = URL.createObjectURL(file)
-      setAvatarUrl(imageUrl)
-      toast({
-        title: "Profile picture updated",
-        description: "Your new profile picture has been set successfully.",
-      })
+      try {
+        const formData = new FormData()
+        formData.append("profilePicture", file)
+
+        const token = localStorage.getItem("token")
+        const response = await fetch("http://localhost:4000/api/user/upload-profile-picture", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          body: formData,
+        })
+
+        if (!response.ok) {
+          throw new Error("Failed to upload profile picture")
+        }
+
+        const data = await response.json()
+        if (data.success) {
+          setAvatarUrl(data.avatarUrl)
+          toast({
+            title: "Profile picture updated",
+            description: "Your new profile picture has been set successfully.",
+          })
+        } else {
+          throw new Error(data.message || "Failed to update profile picture")
+        }
+      } catch (error) {
+        console.error("Error uploading profile picture:", error)
+        toast({
+          title: "Error",
+          description: error instanceof Error ? error.message : "Failed to update profile picture",
+          variant: "destructive",
+        })
+      }
     }
   }
 
@@ -122,6 +251,32 @@ function ProfileSettings() {
       description: "Your profile picture has been removed.",
     })
   }
+
+  const specializations_list = [
+    "General Physician (GP)",
+    "Cardiologist",
+    "Endocrinologist",
+    "Gastroenterologist",
+    "Nephrologist",
+    "Pulmonologist",
+    "Hematologist",
+    "General Surgeon",
+    "Orthopedic Surgeon",
+    "Neurosurgeon",
+    "Plastic Surgeon",
+    "Gynecologist & Obstetrician (OB-GYN)",
+    "Pediatrician",
+    "Dermatologist",
+    "Ophthalmologist",
+    "ENT Specialist (Otorhinolaryngologist)",
+    "Neurologist",
+    "Psychiatrist",
+    "Urologist",
+    "Oncologist",
+    "Rheumatologist",
+    "Radiologist",
+    "Anesthesiologist",
+  ]
 
   const languageOptions = ["English", "Spanish", "French", "German", "Chinese", "Hindi", "Arabic"]
 
@@ -151,49 +306,39 @@ function ProfileSettings() {
           <CardContent className="pt-6">
             <div className="flex items-start gap-6">
               <div className="relative group">
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <div className="relative cursor-pointer group">
-                      <Avatar className="w-24 h-24 transition-opacity group-hover:opacity-90">
-                        <AvatarImage src={avatarUrl} alt={profile.name} />
-                        <AvatarFallback>
-                          {profile.name
-                            .split(" ")
-                            .map((n) => n[0])
-                            .join("")}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Camera className="w-6 h-6 text-white" />
-                      </div>
-                    </div>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="start">
-                    <DropdownMenuItem
-                      className="cursor-pointer"
-                      onSelect={() => document.getElementById("picture-upload")?.click()}
+                <Avatar className="w-24 h-24">
+                  <AvatarImage src={avatarUrl} alt={profile.firstName} />
+                  <AvatarFallback>
+                    {profile.firstName?.[0]}
+                    {profile.lastName?.[0]}
+                  </AvatarFallback>
+                </Avatar>
+                {isEditing && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
+                    <input
+                      type="file"
+                      id="profile-picture"
+                      className="hidden"
+                      accept="image/*"
+                      onChange={handleImageUpload}
+                    />
+                    <label
+                      htmlFor="profile-picture"
+                      className="cursor-pointer p-2 rounded-full bg-white/10 hover:bg-white/20"
                     >
-                      <Upload className="w-4 h-4 mr-2" />
-                      Upload Picture
-                    </DropdownMenuItem>
-                    <DropdownMenuItem className="cursor-pointer text-red-600" onSelect={handleRemoveImage}>
-                      <Trash2 className="w-4 h-4 mr-2" />
-                      Remove Picture
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-                <Input
-                  id="picture-upload"
-                  type="file"
-                  className="hidden"
-                  onChange={handleImageUpload}
-                  accept="image/*"
-                />
+                      <Camera className="w-6 h-6 text-white" />
+                    </label>
+                  </div>
+                )}
               </div>
-              <div className="flex-1">
+              <div className="flex-1 space-y-4">
                 <div className="bg-gray-50 p-4 rounded-lg">
                   <Label className="text-sm text-gray-500">Doctor ID</Label>
                   <p className="text-lg font-semibold">{profile.doctorId}</p>
+                </div>
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <Label className="text-sm text-gray-500">License Number</Label>
+                  <p className="text-lg font-semibold">{profile.licenseNumber || "Not provided"}</p>
                 </div>
               </div>
             </div>
@@ -207,26 +352,38 @@ function ProfileSettings() {
           </CardHeader>
           <CardContent className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="name">Full Name</Label>
-              <Input id="name" name="name" value={profile.name} onChange={handleInputChange} disabled={!isEditing} />
+              <Label htmlFor="firstName">First Name</Label>
+              <Input
+                id="firstName"
+                name="firstName"
+                value={profile.firstName}
+                onChange={handleInputChange}
+                disabled={!isEditing}
+              />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="specializations" className="text-base flex items-center gap-2">
+              <Label htmlFor="lastName">Last Name</Label>
+              <Input
+                id="lastName"
+                name="lastName"
+                value={profile.lastName}
+                onChange={handleInputChange}
+                disabled={!isEditing}
+              />
+            </div>
+            <div className="space-y-2 sm:col-span-2">
+              <Label htmlFor="specializations" className="text-base">
                 Specializations
-                <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded">
-                  Set during registration
-                </span>
               </Label>
-              <div className="grid grid-cols-2 gap-2">
-                {specializations.map((spec) => (
-                  <div key={spec} className="flex items-center space-x-2">
-                    <Badge variant="secondary">{spec}</Badge>
-                  </div>
+              <div className="flex flex-wrap gap-2">
+                {profile.specializations.map((spec) => (
+                  <Badge key={spec} variant="secondary" className="text-sm">
+                    {spec}
+                  </Badge>
                 ))}
               </div>
-              <p className="text-sm text-muted-foreground mt-2">
-                Specializations are set during profile completion and cannot be modified. Please contact support if you
-                need to update your specializations.
+              <p className="text-sm text-muted-foreground">
+                Specializations cannot be edited here. Please contact support for any changes.
               </p>
             </div>
             <div className="space-y-2">
@@ -320,15 +477,59 @@ function ProfileSettings() {
                 </div>
               </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="address">Clinic Address</Label>
-              <Textarea
-                id="address"
-                name="address"
-                value={profile.address}
-                onChange={handleInputChange}
-                disabled={!isEditing}
-              />
+            {/* Clinic Address Section */}
+            <div className="space-y-4">
+              <Label className="text-base font-semibold">Clinic Address</Label>
+              <div className="grid grid-cols-1 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="clinicAddress.street">Street Address</Label>
+                  <Input
+                    id="clinicAddress.street"
+                    name="clinicAddress.street"
+                    value={profile.clinicAddress?.street ?? ""}
+                    onChange={handleInputChange}
+                    disabled={!isEditing}
+                    placeholder="Enter street address"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="clinicAddress.city">City</Label>
+                    <Input
+                      id="clinicAddress.city"
+                      name="clinicAddress.city"
+                      value={profile.clinicAddress?.city ?? ""}
+                      onChange={handleInputChange}
+                      disabled={!isEditing}
+                      placeholder="Enter city"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="clinicAddress.state">State</Label>
+                    <Input
+                      id="clinicAddress.state"
+                      name="clinicAddress.state"
+                      value={profile.clinicAddress?.state ?? ""}
+                      onChange={handleInputChange}
+                      disabled={!isEditing}
+                      placeholder="Enter state"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="clinicAddress.pincode">Pincode</Label>
+                  <Input
+                    id="clinicAddress.pincode"
+                    name="clinicAddress.pincode"
+                    value={profile.clinicAddress?.pincode ?? ""}
+                    onChange={handleInputChange}
+                    disabled={!isEditing}
+                    pattern="[0-9]{6}"
+                    maxLength={6}
+                    placeholder="Enter 6-digit pincode"
+                  />
+                </div>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -590,7 +791,11 @@ function NotificationSettings() {
 
   const notificationTypes = [
     { key: "appointments" as const, label: "Appointment Updates", icon: Calendar },
-    { key: "patientMessages" as const, label: "Patient Messages", icon: MessageSquare },
+    {
+      key: "patientMessages" as const,
+      label: "Patient Messages",
+      icon: MessageSquare,
+    },
     { key: "systemUpdates" as const, label: "System Updates", icon: RefreshCw },
   ]
 
@@ -602,7 +807,7 @@ function NotificationSettings() {
             <Bell className="w-5 h-5 text-blue-500" />
             Notification Types
           </CardTitle>
-          <CardDescription>Choose which notifications you had like to receive</CardDescription>
+          <CardDescription>Choose which notifications you would like to receive</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {notificationTypes.map(({ key, label, icon: Icon }) => (
@@ -623,7 +828,7 @@ function NotificationSettings() {
             <MessageSquare className="w-5 h-5 text-blue-500" />
             Notification Method
           </CardTitle>
-          <CardDescription>Choose how you had like to receive notifications</CardDescription>
+          <CardDescription>Choose how you would like to receive notifications</CardDescription>
         </CardHeader>
         <CardContent>
           <Select value={preferences.preferredMethod} onValueChange={handleMethodChange}>
